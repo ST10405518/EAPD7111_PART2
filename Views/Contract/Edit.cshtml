@@ -1,4 +1,5 @@
 @model EAPD7111_PART2.Models.Contract
+@using Microsoft.AspNetCore.Mvc.Rendering
 
 @{
     ViewData["Title"] = "Edit Contract";
@@ -17,7 +18,7 @@
             <input type="hidden" asp-for="SignedAgreementFilePath" />
             <div class="form-group mb-3">
                 <label asp-for="ClientId" class="control-label">Client</label>
-                <select asp-for="ClientId" class="form-select" asp-items="@(new SelectList(ViewBag.Clients, "ClientId", "Name"))"></select>
+                <select asp-for="ClientId" class="form-select" asp-items="ViewBag.ClientList as IEnumerable<SelectListItem>"></select>
                 <span asp-validation-for="ClientId" class="text-danger"></span>
             </div>
             <div class="form-group mb-3">

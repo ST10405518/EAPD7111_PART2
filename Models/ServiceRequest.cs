@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 
 namespace EAPD7111_PART2.Models
 {
@@ -8,8 +9,8 @@ namespace EAPD7111_PART2.Models
         [Key]
         public int ServiceRequestId { get; set; }
 
-        [Required(ErrorMessage = "Please select a contract.")]
-        [Range(1, int.MaxValue, ErrorMessage = "Please select a contract.")]
+        [Display(Name = "Contract")]
+        [Range(1, int.MaxValue, ErrorMessage = "Please select a contract from the list.")]
         public int ContractId { get; set; }
 
         [Required]
@@ -38,8 +39,8 @@ namespace EAPD7111_PART2.Models
 
         public DateTime? ModifiedDate { get; set; }
 
-        // Navigation property
         [ForeignKey("ContractId")]
-        public Contract Contract { get; set; } = null!;
+        [ValidateNever]
+        public Contract? Contract { get; set; }
     }
 }

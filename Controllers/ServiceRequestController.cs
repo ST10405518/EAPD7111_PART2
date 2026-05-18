@@ -1,4 +1,5 @@
 using EAPD7111_PART2.Data;
+using EAPD7111_PART2.Helpers;
 using EAPD7111_PART2.Models;
 using EAPD7111_PART2.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -57,7 +58,7 @@ namespace EAPD7111_PART2.Controllers
 
         public async Task<IActionResult> Create()
         {
-            ViewBag.Contracts = await GetActiveContractsAsync();
+            await SetContractDropdownAsync();
             return View();
         }
 
@@ -65,13 +66,15 @@ namespace EAPD7111_PART2.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create([Bind("ServiceRequestId,ContractId,RequestNumber,Description,CostUSD,Status,Notes")] ServiceRequest serviceRequest)
         {
+            TryBindContractIdFromForm(serviceRequest);
+
             if (ModelState.IsValid)
             {
                 var contract = await _context.Contracts.FindAsync(serviceRequest.ContractId);
                 if (contract == null)
                 {
                     ModelState.AddModelError("ContractId", "Contract not found.");
-                    ViewBag.Contracts = await GetActiveContractsAsync();
+                    await SetContractDropdownAsync(serviceRequest.ContractId);
                     return View(serviceRequest);
                 }
 
@@ -87,7 +90,7 @@ namespace EAPD7111_PART2.Controllers
                 if (blockedReason != null)
                 {
                     ModelState.AddModelError("ContractId", blockedReason);
-                    ViewBag.Contracts = await GetActiveContractsAsync();
+                    await SetContractDropdownAsync(serviceRequest.ContractId);
                     return View(serviceRequest);
                 }
 
@@ -108,7 +111,7 @@ namespace EAPD7111_PART2.Controllers
                 }
             }
 
-            ViewBag.Contracts = await GetActiveContractsAsync();
+            await SetContractDropdownAsync(serviceRequest.ContractId);
             return View(serviceRequest);
         }
 
@@ -125,7 +128,7 @@ namespace EAPD7111_PART2.Controllers
                 return NotFound();
             }
 
-            ViewBag.Contracts = await _context.Contracts.Include(c => c.Client).ToListAsync();
+            await SetContractDropdownAsync(serviceRequest.ContractId, activeOnly: false);
             return View(serviceRequest);
         }
 
@@ -138,6 +141,8 @@ namespace EAPD7111_PART2.Controllers
                 return NotFound();
             }
 
+            TryBindContractIdFromForm(serviceRequest);
+
             if (ModelState.IsValid)
             {
                 try
@@ -149,7 +154,7 @@ namespace EAPD7111_PART2.Controllers
                         if (blockedReason != null)
                         {
                             ModelState.AddModelError("ContractId", blockedReason);
-                            ViewBag.Contracts = await _context.Contracts.Include(c => c.Client).ToListAsync();
+                            await SetContractDropdownAsync(serviceRequest.ContractId, activeOnly: false);
                             return View(serviceRequest);
                         }
                     }
@@ -171,7 +176,7 @@ namespace EAPD7111_PART2.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
-            ViewBag.Contracts = await _context.Contracts.Include(c => c.Client).ToListAsync();
+            await SetContractDropdownAsync(serviceRequest.ContractId, activeOnly: false);
             return View(serviceRequest);
         }
 
@@ -215,12 +220,36 @@ namespace EAPD7111_PART2.Controllers
             return Json(new { rate, timestamp = DateTime.UtcNow });
         }
 
-        private async Task<List<Contract>> GetActiveContractsAsync()
+        private async Task SetContractDropdownAsync(int? selectedContractId = null, bool activeOnly = true)
         {
-            return await _context.Contracts
-                .Include(c => c.Client)
-                .Where(c => c.Status == ContractStatus.Active)
-                .ToListAsync();
+            var query = _context.Contracts.Include(c => c.Client).AsQueryable();
+            if (activeOnly)
+            {
+                query = query.Where(c => c.Status == ContractStatus.Active);
+            }
+
+            var contracts = await query.OrderBy(c => c.ContractNumber).ToListAsync();
+            ViewBag.ContractList = DropdownHelper.BuildContractList(contracts, selectedContractId);
+        }
+
+        private void TryBindContractIdFromForm(ServiceRequest serviceRequest)
+        {
+            ModelState.Remove("Contract");
+            foreach (var key in ModelState.Keys.Where(k => k.StartsWith("Contract.", StringComparison.Ordinal)).ToList())
+            {
+                ModelState.Remove(key);
+            }
+
+            if (serviceRequest.ContractId > 0)
+            {
+                return;
+            }
+
+            if (int.TryParse(Request.Form["ContractId"], out var contractId) && contractId > 0)
+            {
+                serviceRequest.ContractId = contractId;
+                ModelState.Remove(nameof(serviceRequest.ContractId));
+            }
         }
 
         private bool ServiceRequestExists(int id)

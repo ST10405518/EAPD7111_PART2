@@ -1,4 +1,5 @@
 using EAPD7111_PART2.Data;
+using EAPD7111_PART2.Helpers;
 using EAPD7111_PART2.Models;
 using EAPD7111_PART2.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -79,7 +80,7 @@ namespace EAPD7111_PART2.Controllers
                 return RedirectToAction("Create", "Client");
             }
 
-            ViewBag.Clients = clients;
+            SetClientDropdown();
             var contract = new Contract
             {
                 StartDate = DateTime.Today,
@@ -96,6 +97,8 @@ namespace EAPD7111_PART2.Controllers
             [Bind("ContractId,ClientId,ContractNumber,StartDate,EndDate,Status,ServiceLevel,Description")] Contract contract,
             IFormFile? signedAgreement)
         {
+            TryBindClientIdFromForm(contract);
+
             var dateRangeError = ContractValidationService.GetDateRangeErrorMessage(contract.StartDate, contract.EndDate);
             if (dateRangeError != null)
             {
@@ -104,7 +107,7 @@ namespace EAPD7111_PART2.Controllers
 
             if (!ModelState.IsValid)
             {
-                ViewBag.Clients = _context.Clients.OrderBy(c => c.Name).ToList();
+                SetClientDropdown(contract.ClientId);
                 return View(contract);
             }
 
@@ -115,7 +118,7 @@ namespace EAPD7111_PART2.Controllers
                     if (!_fileUploadService.ValidateFile(signedAgreement, AllowedPdfExtensions))
                     {
                         ModelState.AddModelError("signedAgreement", "Only PDF files are allowed.");
-                        ViewBag.Clients = _context.Clients.OrderBy(c => c.Name).ToList();
+                        SetClientDropdown(contract.ClientId);
                         return View(contract);
                     }
 
@@ -146,7 +149,7 @@ namespace EAPD7111_PART2.Controllers
                 ModelState.AddModelError(string.Empty, $"Could not save the contract: {ex.Message}");
             }
 
-            ViewBag.Clients = _context.Clients.OrderBy(c => c.Name).ToList();
+            SetClientDropdown(contract.ClientId);
             return View(contract);
         }
 
@@ -163,7 +166,7 @@ namespace EAPD7111_PART2.Controllers
                 return NotFound();
             }
 
-            ViewBag.Clients = await _context.Clients.OrderBy(c => c.Name).ToListAsync();
+            SetClientDropdown(contract.ClientId);
             return View(contract);
         }
 
@@ -180,6 +183,8 @@ namespace EAPD7111_PART2.Controllers
                 return NotFound();
             }
 
+            TryBindClientIdFromForm(contract);
+
             var dateRangeError = ContractValidationService.GetDateRangeErrorMessage(contract.StartDate, contract.EndDate);
             if (dateRangeError != null)
             {
@@ -188,7 +193,7 @@ namespace EAPD7111_PART2.Controllers
 
             if (!ModelState.IsValid)
             {
-                ViewBag.Clients = await _context.Clients.OrderBy(c => c.Name).ToListAsync();
+                SetClientDropdown(contract.ClientId);
                 return View(contract);
             }
 
@@ -199,7 +204,7 @@ namespace EAPD7111_PART2.Controllers
                     if (!_fileUploadService.ValidateFile(signedAgreement, AllowedPdfExtensions))
                     {
                         ModelState.AddModelError("signedAgreement", "Only PDF files are allowed.");
-                        ViewBag.Clients = await _context.Clients.OrderBy(c => c.Name).ToListAsync();
+                        SetClientDropdown(contract.ClientId);
                         return View(contract);
                     }
 
@@ -244,7 +249,7 @@ namespace EAPD7111_PART2.Controllers
                 ModelState.AddModelError(string.Empty, $"Could not update the contract: {ex.Message}");
             }
 
-            ViewBag.Clients = await _context.Clients.OrderBy(c => c.Name).ToListAsync();
+            SetClientDropdown(contract.ClientId);
             return View(contract);
         }
 
@@ -327,6 +332,37 @@ namespace EAPD7111_PART2.Controllers
         private bool ContractExists(int id)
         {
             return _context.Contracts.Any(e => e.ContractId == id);
+        }
+
+        private void SetClientDropdown(int? selectedClientId = null)
+        {
+            var clients = _context.Clients.OrderBy(c => c.Name).ToList();
+            ViewBag.ClientList = DropdownHelper.BuildClientList(clients, selectedClientId);
+        }
+
+        private void ClearNavigationPropertyValidation()
+        {
+            ModelState.Remove("Client");
+            foreach (var key in ModelState.Keys.Where(k => k.StartsWith("Client.", StringComparison.Ordinal)).ToList())
+            {
+                ModelState.Remove(key);
+            }
+        }
+
+        private void TryBindClientIdFromForm(Contract contract)
+        {
+            ClearNavigationPropertyValidation();
+
+            if (contract.ClientId > 0)
+            {
+                return;
+            }
+
+            if (int.TryParse(Request.Form["ClientId"], out var clientId) && clientId > 0)
+            {
+                contract.ClientId = clientId;
+                ModelState.Remove(nameof(contract.ClientId));
+            }
         }
     }
 }
