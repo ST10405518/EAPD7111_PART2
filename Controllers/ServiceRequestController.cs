@@ -1,25 +1,30 @@
 using EAPD7111_PART2.Data;
 using EAPD7111_PART2.Models;
+using EAPD7111_PART2.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Net.Http.Headers;
 
 namespace EAPD7111_PART2.Controllers
 {
     public class ServiceRequestController : Controller
     {
         private readonly GLMSDbContext _context;
-        private readonly IHttpClientFactory _httpClientFactory;
-        private readonly ILogger<ServiceRequestController> _logger;
+        private readonly ICurrencyConversionService _currencyService;
+        private readonly IContractWorkflowService _workflowService;
+        private readonly IContractStatusAutomationService _statusAutomationService;
 
-        public ServiceRequestController(GLMSDbContext context, IHttpClientFactory httpClientFactory, ILogger<ServiceRequestController> logger)
+        public ServiceRequestController(
+            GLMSDbContext context,
+            ICurrencyConversionService currencyService,
+            IContractWorkflowService workflowService,
+            IContractStatusAutomationService statusAutomationService)
         {
             _context = context;
-            _httpClientFactory = httpClientFactory;
-            _logger = logger;
+            _currencyService = currencyService;
+            _workflowService = workflowService;
+            _statusAutomationService = statusAutomationService;
         }
 
-        // GET: ServiceRequest
         public async Task<IActionResult> Index()
         {
             var serviceRequests = await _context.ServiceRequests
@@ -30,7 +35,6 @@ namespace EAPD7111_PART2.Controllers
             return View(serviceRequests);
         }
 
-        // GET: ServiceRequest/Details/5
         public async Task<IActionResult> Details(int? id)
         {
             if (id == null)
@@ -51,51 +55,44 @@ namespace EAPD7111_PART2.Controllers
             return View(serviceRequest);
         }
 
-        // GET: ServiceRequest/Create
         public async Task<IActionResult> Create()
         {
-            // Only show active contracts
-            ViewBag.Contracts = await _context.Contracts
-                .Include(c => c.Client)
-                .Where(c => c.Status == ContractStatus.Active)
-                .ToListAsync();
+            ViewBag.Contracts = await GetActiveContractsAsync();
             return View();
         }
 
-        // POST: ServiceRequest/Create
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create([Bind("ServiceRequestId,ContractId,RequestNumber,Description,CostUSD,Status,Notes")] ServiceRequest serviceRequest)
         {
             if (ModelState.IsValid)
             {
-                // Validate contract status - cannot create service request for expired or on-hold contracts
                 var contract = await _context.Contracts.FindAsync(serviceRequest.ContractId);
                 if (contract == null)
                 {
                     ModelState.AddModelError("ContractId", "Contract not found.");
-                    ViewBag.Contracts = await _context.Contracts.Include(c => c.Client).Where(c => c.Status == ContractStatus.Active).ToListAsync();
+                    ViewBag.Contracts = await GetActiveContractsAsync();
                     return View(serviceRequest);
                 }
 
-                if (contract.Status == ContractStatus.Expired || contract.Status == ContractStatus.OnHold)
+                var effectiveStatus = _statusAutomationService.ResolveEffectiveStatus(contract.Status, contract.EndDate);
+                if (effectiveStatus != contract.Status)
                 {
-                    ModelState.AddModelError("ContractId", $"Cannot create service request for contract with status: {contract.Status}. Only Active contracts are allowed.");
-                    ViewBag.Contracts = await _context.Contracts.Include(c => c.Client).Where(c => c.Status == ContractStatus.Active).ToListAsync();
-                    return View(serviceRequest);
+                    contract.Status = effectiveStatus;
+                    contract.ModifiedDate = DateTime.UtcNow;
+                    await _context.SaveChangesAsync();
                 }
 
-                // Get exchange rate from API
-                decimal exchangeRate = await GetExchangeRateAsync();
-                if (exchangeRate <= 0)
+                var blockedReason = _workflowService.GetServiceRequestBlockedReason(effectiveStatus);
+                if (blockedReason != null)
                 {
-                    ModelState.AddModelError("", "Unable to retrieve exchange rate. Please try again.");
-                    ViewBag.Contracts = await _context.Contracts.Include(c => c.Client).Where(c => c.Status == ContractStatus.Active).ToListAsync();
+                    ModelState.AddModelError("ContractId", blockedReason);
+                    ViewBag.Contracts = await GetActiveContractsAsync();
                     return View(serviceRequest);
                 }
 
-                // Calculate ZAR cost
-                serviceRequest.CostZAR = serviceRequest.CostUSD * exchangeRate;
+                var exchangeRate = await _currencyService.GetUsdToZarRateAsync();
+                serviceRequest.CostZAR = _currencyService.CalculateZARFromUSD(serviceRequest.CostUSD, exchangeRate);
                 serviceRequest.CreatedDate = DateTime.UtcNow;
 
                 _context.Add(serviceRequest);
@@ -103,11 +100,10 @@ namespace EAPD7111_PART2.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
-            ViewBag.Contracts = await _context.Contracts.Include(c => c.Client).Where(c => c.Status == ContractStatus.Active).ToListAsync();
+            ViewBag.Contracts = await GetActiveContractsAsync();
             return View(serviceRequest);
         }
 
-        // GET: ServiceRequest/Edit/5
         public async Task<IActionResult> Edit(int? id)
         {
             if (id == null)
@@ -125,7 +121,6 @@ namespace EAPD7111_PART2.Controllers
             return View(serviceRequest);
         }
 
-        // POST: ServiceRequest/Edit/5
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(int id, [Bind("ServiceRequestId,ContractId,RequestNumber,Description,CostUSD,CostZAR,Status,Notes,CreatedDate")] ServiceRequest serviceRequest)
@@ -139,13 +134,16 @@ namespace EAPD7111_PART2.Controllers
             {
                 try
                 {
-                    // Validate contract status
                     var contract = await _context.Contracts.FindAsync(serviceRequest.ContractId);
-                    if (contract != null && (contract.Status == ContractStatus.Expired || contract.Status == ContractStatus.OnHold))
+                    if (contract != null)
                     {
-                        ModelState.AddModelError("ContractId", $"Cannot update service request for contract with status: {contract.Status}.");
-                        ViewBag.Contracts = await _context.Contracts.Include(c => c.Client).ToListAsync();
-                        return View(serviceRequest);
+                        var blockedReason = _workflowService.GetServiceRequestBlockedReason(contract.Status);
+                        if (blockedReason != null)
+                        {
+                            ModelState.AddModelError("ContractId", blockedReason);
+                            ViewBag.Contracts = await _context.Contracts.Include(c => c.Client).ToListAsync();
+                            return View(serviceRequest);
+                        }
                     }
 
                     serviceRequest.ModifiedDate = DateTime.UtcNow;
@@ -158,11 +156,10 @@ namespace EAPD7111_PART2.Controllers
                     {
                         return NotFound();
                     }
-                    else
-                    {
-                        throw;
-                    }
+
+                    throw;
                 }
+
                 return RedirectToAction(nameof(Index));
             }
 
@@ -170,7 +167,6 @@ namespace EAPD7111_PART2.Controllers
             return View(serviceRequest);
         }
 
-        // GET: ServiceRequest/Delete/5
         public async Task<IActionResult> Delete(int? id)
         {
             if (id == null)
@@ -191,7 +187,6 @@ namespace EAPD7111_PART2.Controllers
             return View(serviceRequest);
         }
 
-        // POST: ServiceRequest/Delete/5
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
@@ -206,45 +201,18 @@ namespace EAPD7111_PART2.Controllers
             return RedirectToAction(nameof(Index));
         }
 
-        // GET: ServiceRequest/GetExchangeRate
         public async Task<IActionResult> GetExchangeRate()
         {
-            decimal rate = await GetExchangeRateAsync();
-            return Json(new { rate = rate, timestamp = DateTime.UtcNow });
+            var rate = await _currencyService.GetUsdToZarRateAsync();
+            return Json(new { rate, timestamp = DateTime.UtcNow });
         }
 
-        private async Task<decimal> GetExchangeRateAsync()
+        private async Task<List<Contract>> GetActiveContractsAsync()
         {
-            try
-            {
-                var client = _httpClientFactory.CreateClient();
-                client.DefaultRequestHeaders.Add("User-Agent", "GLMS/1.0");
-                
-                // Using a free exchange rate API (ExchangeRate-API)
-                // Alternative: https://open.er-api.com/v6/latest/USD
-                var response = await client.GetAsync("https://open.er-api.com/v6/latest/USD");
-                
-                if (response.IsSuccessStatusCode)
-                {
-                    var content = await response.Content.ReadAsStringAsync();
-                    
-                    // Parse JSON response
-                    using var jsonDoc = System.Text.Json.JsonDocument.Parse(content);
-                    var rates = jsonDoc.RootElement.GetProperty("rates");
-                    
-                    if (rates.TryGetProperty("ZAR", out var zarRate))
-                    {
-                        return zarRate.GetDecimal();
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error fetching exchange rate");
-            }
-
-            // Fallback rate if API fails
-            return 18.50m; // Default fallback rate
+            return await _context.Contracts
+                .Include(c => c.Client)
+                .Where(c => c.Status == ContractStatus.Active)
+                .ToListAsync();
         }
 
         private bool ServiceRequestExists(int id)

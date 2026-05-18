@@ -1,4 +1,5 @@
 @model EAPD7111_PART2.Models.ServiceRequest
+@using EAPD7111_PART2.Services
 
 @{
     ViewData["Title"] = "Create Service Request";
@@ -89,15 +90,15 @@
                     $('#exchangeRateInfo').text('Current USD to ZAR rate: ' + data.rate.toFixed(2));
                     calculateZAR();
                 }).fail(function() {
-                    $('#exchangeRateInfo').text('Using fallback rate: 18.50');
-                    window.exchangeRate = 18.50;
+                    window.exchangeRate = @CurrencyConversionService.FallbackUsdToZarRate;
+                    $('#exchangeRateInfo').text('Using fallback rate: ' + window.exchangeRate.toFixed(2));
                     calculateZAR();
                 });
             }
 
             function calculateZAR() {
                 var usd = parseFloat($('#costUSD').val()) || 0;
-                var zar = usd * (window.exchangeRate || 18.50);
+                var zar = usd * (window.exchangeRate || @CurrencyConversionService.FallbackUsdToZarRate);
                 $('#costZAR').val(zar.toFixed(2));
             }
         });

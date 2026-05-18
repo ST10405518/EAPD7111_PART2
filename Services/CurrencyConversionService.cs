@@ -1,16 +1,19 @@
-using System.Net.Http.Json;
+using System.Text.Json;
 
 namespace EAPD7111_PART2.Services
 {
     public class CurrencyConversionService : ICurrencyConversionService
     {
-        private readonly HttpClient _httpClient;
-        private readonly IConfiguration _configuration;
+        public const decimal FallbackUsdToZarRate = 18.50m;
 
-        public CurrencyConversionService(HttpClient httpClient, IConfiguration configuration)
+        private readonly HttpClient _httpClient;
+        private readonly ILogger<CurrencyConversionService> _logger;
+
+        public CurrencyConversionService(HttpClient httpClient, ILogger<CurrencyConversionService> logger)
         {
             _httpClient = httpClient;
-            _configuration = configuration;
+            _logger = logger;
+            _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "GLMS/1.0");
         }
 
         public decimal CalculateZARFromUSD(decimal usdAmount, decimal exchangeRate)
@@ -28,42 +31,37 @@ namespace EAPD7111_PART2.Services
             return Math.Round(usdAmount * exchangeRate, 2);
         }
 
-        public async Task<decimal> ConvertUSDToZARAsync(decimal usdAmount)
+        public async Task<decimal> GetUsdToZarRateAsync()
         {
             try
             {
-                // Using a free exchange rate API
-                // In production, you would use a proper API key
-                var response = await _httpClient.GetAsync("https://api.exchangerate-api.com/v4/latest/USD");
-                
+                var response = await _httpClient.GetAsync("https://open.er-api.com/v6/latest/USD");
                 if (!response.IsSuccessStatusCode)
                 {
-                    throw new HttpRequestException($"Failed to get exchange rate. Status code: {response.StatusCode}");
+                    return FallbackUsdToZarRate;
                 }
 
-                var data = await response.Content.ReadFromJsonAsync<ExchangeRateResponse>();
-                
-                if (data == null || data.rates == null || !data.rates.ContainsKey("ZAR"))
+                var content = await response.Content.ReadAsStringAsync();
+                using var jsonDoc = JsonDocument.Parse(content);
+                var rates = jsonDoc.RootElement.GetProperty("rates");
+
+                if (rates.TryGetProperty("ZAR", out var zarRate))
                 {
-                    throw new InvalidOperationException("Invalid exchange rate response.");
+                    return zarRate.GetDecimal();
                 }
-
-                decimal exchangeRate = data.rates["ZAR"];
-                return CalculateZARFromUSD(usdAmount, exchangeRate);
             }
             catch (Exception ex)
             {
-                // Fallback to a default rate if API fails
-                // In production, you might want to log this and handle it differently
-                const decimal fallbackRate = 18.50m;
-                return CalculateZARFromUSD(usdAmount, fallbackRate);
+                _logger.LogError(ex, "Error fetching USD to ZAR exchange rate");
             }
+
+            return FallbackUsdToZarRate;
         }
 
-        private class ExchangeRateResponse
+        public async Task<decimal> ConvertUSDToZARAsync(decimal usdAmount)
         {
-            public string? base_code { get; set; }
-            public Dictionary<string, decimal>? rates { get; set; }
+            var exchangeRate = await GetUsdToZarRateAsync();
+            return CalculateZARFromUSD(usdAmount, exchangeRate);
         }
     }
 }

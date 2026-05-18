@@ -53,12 +53,12 @@ namespace EAPD7111_PART2.Services
         {
             string fullPath = Path.Combine(_webHostEnvironment.WebRootPath, filePath);
             
-            if (!File.Exists(fullPath))
+            if (!System.IO.File.Exists(fullPath))
             {
                 throw new FileNotFoundException("File not found.", fullPath);
             }
 
-            return File.ReadAllBytes(fullPath);
+            return System.IO.File.ReadAllBytes(fullPath);
         }
     }
 }

@@ -359,5 +359,9 @@ MigrationBackup/
 # Ionide (cross platform F# VS Code tools) working folder
 .ionide/
 
+# Uploaded contract PDFs (stored locally at runtime)
+wwwroot/uploads/contracts/*
+!wwwroot/uploads/contracts/.gitkeep
+
 # Fody - auto-generated XML schema
 FodyWeavers.xsd

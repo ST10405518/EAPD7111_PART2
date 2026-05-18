@@ -1,5 +1,6 @@
 using EAPD7111_PART2.Data;
 using EAPD7111_PART2.Models;
+using EAPD7111_PART2.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -7,40 +8,38 @@ namespace EAPD7111_PART2.Controllers
 {
     public class ContractController : Controller
     {
-        private readonly GLMSDbContext _context;
-        private readonly IWebHostEnvironment _webHostEnvironment;
+        private static readonly string[] AllowedPdfExtensions = [".pdf"];
+        private const string ContractUploadFolder = "uploads/contracts";
 
-        public ContractController(GLMSDbContext context, IWebHostEnvironment webHostEnvironment)
+        private readonly GLMSDbContext _context;
+        private readonly IFileUploadService _fileUploadService;
+        private readonly IWebHostEnvironment _webHostEnvironment;
+        private readonly IContractStatusAutomationService _statusAutomationService;
+
+        public ContractController(
+            GLMSDbContext context,
+            IFileUploadService fileUploadService,
+            IWebHostEnvironment webHostEnvironment,
+            IContractStatusAutomationService statusAutomationService)
         {
             _context = context;
+            _fileUploadService = fileUploadService;
             _webHostEnvironment = webHostEnvironment;
+            _statusAutomationService = statusAutomationService;
         }
 
-        // GET: Contract
         public async Task<IActionResult> Index(DateTime? startDate, DateTime? endDate, ContractStatus? status)
         {
-            var contracts = _context.Contracts.Include(c => c.Client).AsQueryable();
+            await _statusAutomationService.ApplyAutomaticStatusUpdatesAsync();
 
-            // Filter by date range
-            if (startDate.HasValue)
-            {
-                contracts = contracts.Where(c => c.StartDate >= startDate.Value);
-            }
-
-            if (endDate.HasValue)
-            {
-                contracts = contracts.Where(c => c.EndDate <= endDate.Value);
-            }
-
-            // Filter by status
-            if (status.HasValue)
-            {
-                contracts = contracts.Where(c => c.Status == status.Value);
-            }
+            var contracts = ContractQueryService.ApplyFilters(
+                _context.Contracts.Include(c => c.Client),
+                startDate,
+                endDate,
+                status);
 
             var model = await contracts.OrderByDescending(c => c.CreatedDate).ToListAsync();
 
-            // Pass filter values to view for maintaining state
             ViewBag.StartDate = startDate?.ToString("yyyy-MM-dd");
             ViewBag.EndDate = endDate?.ToString("yyyy-MM-dd");
             ViewBag.Status = status;
@@ -48,7 +47,6 @@ namespace EAPD7111_PART2.Controllers
             return View(model);
         }
 
-        // GET: Contract/Details/5
         public async Task<IActionResult> Details(int? id)
         {
             if (id == null)
@@ -69,45 +67,35 @@ namespace EAPD7111_PART2.Controllers
             return View(contract);
         }
 
-        // GET: Contract/Create
         public IActionResult Create()
         {
             ViewBag.Clients = _context.Clients.ToList();
             return View();
         }
 
-        // POST: Contract/Create
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create([Bind("ContractId,ClientId,ContractNumber,StartDate,EndDate,Status,ServiceLevel,Description")] Contract contract, IFormFile? signedAgreement)
         {
+            var dateRangeError = ContractValidationService.GetDateRangeErrorMessage(contract.StartDate, contract.EndDate);
+            if (dateRangeError != null)
+            {
+                ModelState.AddModelError(nameof(contract.EndDate), dateRangeError);
+            }
+
             if (ModelState.IsValid)
             {
-                // Handle file upload
                 if (signedAgreement != null && signedAgreement.Length > 0)
                 {
-                    // Validate file type (only PDF allowed)
-                    if (signedAgreement.ContentType != "application/pdf" && 
-                        !signedAgreement.FileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+                    if (!_fileUploadService.ValidateFile(signedAgreement, AllowedPdfExtensions))
                     {
                         ModelState.AddModelError("signedAgreement", "Only PDF files are allowed.");
                         ViewBag.Clients = _context.Clients.ToList();
                         return View(contract);
                     }
 
-                    // Save file
-                    string uploadsFolder = Path.Combine(_webHostEnvironment.WebRootPath, "uploads", "contracts");
-                    Directory.CreateDirectory(uploadsFolder);
-
-                    string uniqueFileName = Guid.NewGuid().ToString() + "_" + signedAgreement.FileName;
-                    string filePath = Path.Combine(uploadsFolder, uniqueFileName);
-
-                    using (var fileStream = new FileStream(filePath, FileMode.Create))
-                    {
-                        await signedAgreement.CopyToAsync(fileStream);
-                    }
-
-                    contract.SignedAgreementFilePath = "/uploads/contracts/" + uniqueFileName;
+                    var relativePath = await _fileUploadService.UploadFileAsync(signedAgreement, ContractUploadFolder);
+                    contract.SignedAgreementFilePath = "/" + relativePath.Replace('\\', '/');
                 }
 
                 contract.CreatedDate = DateTime.UtcNow;
@@ -120,7 +108,6 @@ namespace EAPD7111_PART2.Controllers
             return View(contract);
         }
 
-        // GET: Contract/Edit/5
         public async Task<IActionResult> Edit(int? id)
         {
             if (id == null)
@@ -138,7 +125,6 @@ namespace EAPD7111_PART2.Controllers
             return View(contract);
         }
 
-        // POST: Contract/Edit/5
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(int id, [Bind("ContractId,ClientId,ContractNumber,StartDate,EndDate,Status,ServiceLevel,Description,SignedAgreementFilePath,CreatedDate")] Contract contract, IFormFile? signedAgreement)
@@ -148,47 +134,35 @@ namespace EAPD7111_PART2.Controllers
                 return NotFound();
             }
 
+            var dateRangeError = ContractValidationService.GetDateRangeErrorMessage(contract.StartDate, contract.EndDate);
+            if (dateRangeError != null)
+            {
+                ModelState.AddModelError(nameof(contract.EndDate), dateRangeError);
+            }
+
             if (ModelState.IsValid)
             {
                 try
                 {
-                    // Handle file upload if new file provided
                     if (signedAgreement != null && signedAgreement.Length > 0)
                     {
-                        // Validate file type (only PDF allowed)
-                        if (signedAgreement.ContentType != "application/pdf" && 
-                            !signedAgreement.FileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+                        if (!_fileUploadService.ValidateFile(signedAgreement, AllowedPdfExtensions))
                         {
                             ModelState.AddModelError("signedAgreement", "Only PDF files are allowed.");
                             ViewBag.Clients = _context.Clients.ToList();
                             return View(contract);
                         }
 
-                        // Delete old file if exists
                         if (!string.IsNullOrEmpty(contract.SignedAgreementFilePath))
                         {
-                            string oldFilePath = Path.Combine(_webHostEnvironment.WebRootPath, contract.SignedAgreementFilePath.TrimStart('/'));
-                            if (System.IO.File.Exists(oldFilePath))
-                            {
-                                System.IO.File.Delete(oldFilePath);
-                            }
+                            DeletePhysicalFile(contract.SignedAgreementFilePath);
                         }
 
-                        // Save new file
-                        string uploadsFolder = Path.Combine(_webHostEnvironment.WebRootPath, "uploads", "contracts");
-                        Directory.CreateDirectory(uploadsFolder);
-
-                        string uniqueFileName = Guid.NewGuid().ToString() + "_" + signedAgreement.FileName;
-                        string filePath = Path.Combine(uploadsFolder, uniqueFileName);
-
-                        using (var fileStream = new FileStream(filePath, FileMode.Create))
-                        {
-                            await signedAgreement.CopyToAsync(fileStream);
-                        }
-
-                        contract.SignedAgreementFilePath = "/uploads/contracts/" + uniqueFileName;
+                        var relativePath = await _fileUploadService.UploadFileAsync(signedAgreement, ContractUploadFolder);
+                        contract.SignedAgreementFilePath = "/" + relativePath.Replace('\\', '/');
                     }
 
+                    contract.Status = _statusAutomationService.ResolveEffectiveStatus(contract.Status, contract.EndDate);
                     contract.ModifiedDate = DateTime.UtcNow;
                     _context.Update(contract);
                     await _context.SaveChangesAsync();
@@ -199,11 +173,10 @@ namespace EAPD7111_PART2.Controllers
                     {
                         return NotFound();
                     }
-                    else
-                    {
-                        throw;
-                    }
+
+                    throw;
                 }
+
                 return RedirectToAction(nameof(Index));
             }
 
@@ -211,7 +184,6 @@ namespace EAPD7111_PART2.Controllers
             return View(contract);
         }
 
-        // GET: Contract/Delete/5
         public async Task<IActionResult> Delete(int? id)
         {
             if (id == null)
@@ -230,7 +202,6 @@ namespace EAPD7111_PART2.Controllers
             return View(contract);
         }
 
-        // POST: Contract/Delete/5
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
@@ -238,14 +209,9 @@ namespace EAPD7111_PART2.Controllers
             var contract = await _context.Contracts.FindAsync(id);
             if (contract != null)
             {
-                // Delete file if exists
                 if (!string.IsNullOrEmpty(contract.SignedAgreementFilePath))
                 {
-                    string filePath = Path.Combine(_webHostEnvironment.WebRootPath, contract.SignedAgreementFilePath.TrimStart('/'));
-                    if (System.IO.File.Exists(filePath))
-                    {
-                        System.IO.File.Delete(filePath);
-                    }
+                    DeletePhysicalFile(contract.SignedAgreementFilePath);
                 }
 
                 _context.Contracts.Remove(contract);
@@ -255,7 +221,6 @@ namespace EAPD7111_PART2.Controllers
             return RedirectToAction(nameof(Index));
         }
 
-        // GET: Contract/Download/5
         public async Task<IActionResult> Download(int? id)
         {
             if (id == null)
@@ -269,15 +234,26 @@ namespace EAPD7111_PART2.Controllers
                 return NotFound();
             }
 
-            string filePath = Path.Combine(_webHostEnvironment.WebRootPath, contract.SignedAgreementFilePath.TrimStart('/'));
-            if (!System.IO.File.Exists(filePath))
+            var relativePath = contract.SignedAgreementFilePath.TrimStart('/');
+            try
+            {
+                var fileBytes = _fileUploadService.DownloadFile(relativePath);
+                var fileName = Path.GetFileName(relativePath);
+                return File(fileBytes, "application/pdf", fileName);
+            }
+            catch (FileNotFoundException)
             {
                 return NotFound();
             }
+        }
 
-            byte[] fileBytes = await System.IO.File.ReadAllBytesAsync(filePath);
-            string fileName = Path.GetFileName(filePath);
-            return File(fileBytes, "application/pdf", fileName);
+        private void DeletePhysicalFile(string webRelativePath)
+        {
+            var filePath = Path.Combine(_webHostEnvironment.WebRootPath, webRelativePath.TrimStart('/'));
+            if (System.IO.File.Exists(filePath))
+            {
+                System.IO.File.Delete(filePath);
+            }
         }
 
         private bool ContractExists(int id)
