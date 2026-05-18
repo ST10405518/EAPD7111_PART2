@@ -53,10 +53,18 @@ namespace EAPD7111_PART2.Controllers
         {
             if (ModelState.IsValid)
             {
-                client.CreatedDate = DateTime.UtcNow;
-                _context.Add(client);
-                await _context.SaveChangesAsync();
-                return RedirectToAction(nameof(Index));
+                try
+                {
+                    client.CreatedDate = DateTime.UtcNow;
+                    _context.Add(client);
+                    await _context.SaveChangesAsync();
+                    TempData["Success"] = "Client created successfully.";
+                    return RedirectToAction(nameof(Index));
+                }
+                catch (DbUpdateException)
+                {
+                    ModelState.AddModelError(string.Empty, "Could not save the client. Ensure SQL Server LocalDB is running and the database is migrated.");
+                }
             }
             return View(client);
         }

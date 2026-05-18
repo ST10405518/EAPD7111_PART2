@@ -1,8 +1,19 @@
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.EntityFrameworkCore;
 using EAPD7111_PART2.Data;
 using EAPD7111_PART2.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.Configure<FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = 52_428_800;
+});
+
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = 52_428_800;
+});
 
 builder.Services.AddControllersWithViews()
     .AddRazorRuntimeCompilation();
@@ -14,6 +25,10 @@ builder.Services.AddScoped<IFileUploadService, FileUploadService>();
 builder.Services.AddScoped<IContractWorkflowService, ContractWorkflowService>();
 builder.Services.AddScoped<IContractStatusAutomationService, ContractStatusAutomationService>();
 builder.Services.AddHttpClient<ICurrencyConversionService, CurrencyConversionService>();
+
+var webRootPath = Path.Combine(builder.Environment.ContentRootPath, "wwwroot");
+Directory.CreateDirectory(webRootPath);
+Directory.CreateDirectory(Path.Combine(webRootPath, "uploads", "contracts"));
 
 var app = builder.Build();
 
@@ -37,8 +52,8 @@ try
 catch (Exception ex)
 {
     app.Logger.LogWarning(ex,
-        "Database migration failed. The site will still run, but data pages need SQL Server. " +
-        "Check your connection string in appsettings.json and ensure LocalDB/SQL Server is running.");
+        "Database migration failed. Data features require SQL Server LocalDB. " +
+        "Run: dotnet ef database update");
 }
 
 app.UseHttpsRedirection();
@@ -50,6 +65,6 @@ app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
 
-app.Logger.LogInformation("GLMS is running. Open https://localhost:7159 or http://localhost:5064 in your browser.");
+app.Logger.LogInformation("GLMS is running. Open https://localhost:7159 or http://localhost:5064");
 
 app.Run();

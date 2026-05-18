@@ -95,9 +95,17 @@ namespace EAPD7111_PART2.Controllers
                 serviceRequest.CostZAR = _currencyService.CalculateZARFromUSD(serviceRequest.CostUSD, exchangeRate);
                 serviceRequest.CreatedDate = DateTime.UtcNow;
 
-                _context.Add(serviceRequest);
-                await _context.SaveChangesAsync();
-                return RedirectToAction(nameof(Index));
+                try
+                {
+                    _context.Add(serviceRequest);
+                    await _context.SaveChangesAsync();
+                    TempData["Success"] = "Service request created successfully.";
+                    return RedirectToAction(nameof(Index));
+                }
+                catch (DbUpdateException)
+                {
+                    ModelState.AddModelError(string.Empty, "Could not save the service request. Check database connection.");
+                }
             }
 
             ViewBag.Contracts = await GetActiveContractsAsync();

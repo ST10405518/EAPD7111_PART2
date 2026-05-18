@@ -8,7 +8,8 @@ namespace EAPD7111_PART2.Models
         [Key]
         public int ServiceRequestId { get; set; }
 
-        [Required]
+        [Required(ErrorMessage = "Please select a contract.")]
+        [Range(1, int.MaxValue, ErrorMessage = "Please select a contract.")]
         public int ContractId { get; set; }
 
         [Required]

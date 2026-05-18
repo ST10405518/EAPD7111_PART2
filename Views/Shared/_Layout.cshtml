@@ -571,6 +571,26 @@
             margin-bottom: 1.5rem;
         }
 
+        .hero-card, .filter-card {
+            background: var(--white);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow);
+            border: 1px solid var(--gray-200);
+            padding: 1.5rem;
+            height: 100%;
+            text-align: center;
+        }
+
+        .filter-card {
+            text-align: left;
+            margin-bottom: 1.5rem;
+        }
+
+        .hero-card h5 {
+            color: var(--primary);
+            margin-bottom: 0.75rem;
+        }
+
         .row {
             display: flex;
             flex-wrap: wrap;
@@ -680,7 +700,7 @@
     <div class="header-top">
         <div class="container">
             <div class="header-contact">
-                <span><i class="fas fa-phone"></i> +1 (555) 123-4567</span>
+                <span><i class="fas fa-phone"></i> 078 840 8161</span>
                 <span><i class="fas fa-envelope"></i> info@techmove.com</span>
             </div>
             <div>
@@ -735,6 +755,7 @@
     <!-- Main Content -->
     <main class="main-content">
         <div class="container">
+        <partial name="_Alerts" />
         @RenderBody()
         </div>
     </main>
@@ -759,7 +780,7 @@
                 <div class="footer-section">
                     <h4>Contact Us</h4>
                     <p><i class="fas fa-map-marker-alt"></i> 123 Logistics Way, Shipping City, SC 12345</p>
-                    <p><i class="fas fa-phone"></i> +1 (555) 123-4567</p>
+                    <p><i class="fas fa-phone"></i> 078 840 8161</p>
                     <p><i class="fas fa-envelope"></i> info@techmove.com</p>
                 </div>
             </div>

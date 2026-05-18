@@ -8,7 +8,8 @@ namespace EAPD7111_PART2.Models
         [Key]
         public int ContractId { get; set; }
 
-        [Required]
+        [Required(ErrorMessage = "Please select a client.")]
+        [Range(1, int.MaxValue, ErrorMessage = "Please select a client.")]
         public int ClientId { get; set; }
 
         [Required]

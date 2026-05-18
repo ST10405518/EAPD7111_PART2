@@ -18,8 +18,8 @@ namespace EAPD7111_PART2.Models
         public string Email { get; set; } = string.Empty;
 
         [Required]
-        [Phone]
         [StringLength(20)]
+        [RegularExpression(@"^[\d\s\+\-\(\)]+$", ErrorMessage = "Enter a valid phone number (e.g. 078 840 8161).")]
         public string PhoneNumber { get; set; } = string.Empty;
 
         [Required]

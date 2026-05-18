@@ -15,17 +15,20 @@ namespace EAPD7111_PART2.Controllers
         private readonly IFileUploadService _fileUploadService;
         private readonly IWebHostEnvironment _webHostEnvironment;
         private readonly IContractStatusAutomationService _statusAutomationService;
+        private readonly ILogger<ContractController> _logger;
 
         public ContractController(
             GLMSDbContext context,
             IFileUploadService fileUploadService,
             IWebHostEnvironment webHostEnvironment,
-            IContractStatusAutomationService statusAutomationService)
+            IContractStatusAutomationService statusAutomationService,
+            ILogger<ContractController> logger)
         {
             _context = context;
             _fileUploadService = fileUploadService;
             _webHostEnvironment = webHostEnvironment;
             _statusAutomationService = statusAutomationService;
+            _logger = logger;
         }
 
         public async Task<IActionResult> Index(DateTime? startDate, DateTime? endDate, ContractStatus? status)
@@ -69,13 +72,29 @@ namespace EAPD7111_PART2.Controllers
 
         public IActionResult Create()
         {
-            ViewBag.Clients = _context.Clients.ToList();
-            return View();
+            var clients = _context.Clients.OrderBy(c => c.Name).ToList();
+            if (clients.Count == 0)
+            {
+                TempData["Error"] = "You must create at least one client before adding a contract.";
+                return RedirectToAction("Create", "Client");
+            }
+
+            ViewBag.Clients = clients;
+            var contract = new Contract
+            {
+                StartDate = DateTime.Today,
+                EndDate = DateTime.Today.AddYears(1),
+                Status = ContractStatus.Active
+            };
+            return View(contract);
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("ContractId,ClientId,ContractNumber,StartDate,EndDate,Status,ServiceLevel,Description")] Contract contract, IFormFile? signedAgreement)
+        [RequestSizeLimit(52_428_800)]
+        public async Task<IActionResult> Create(
+            [Bind("ContractId,ClientId,ContractNumber,StartDate,EndDate,Status,ServiceLevel,Description")] Contract contract,
+            IFormFile? signedAgreement)
         {
             var dateRangeError = ContractValidationService.GetDateRangeErrorMessage(contract.StartDate, contract.EndDate);
             if (dateRangeError != null)
@@ -83,28 +102,51 @@ namespace EAPD7111_PART2.Controllers
                 ModelState.AddModelError(nameof(contract.EndDate), dateRangeError);
             }
 
-            if (ModelState.IsValid)
+            if (!ModelState.IsValid)
+            {
+                ViewBag.Clients = _context.Clients.OrderBy(c => c.Name).ToList();
+                return View(contract);
+            }
+
+            try
             {
                 if (signedAgreement != null && signedAgreement.Length > 0)
                 {
                     if (!_fileUploadService.ValidateFile(signedAgreement, AllowedPdfExtensions))
                     {
                         ModelState.AddModelError("signedAgreement", "Only PDF files are allowed.");
-                        ViewBag.Clients = _context.Clients.ToList();
+                        ViewBag.Clients = _context.Clients.OrderBy(c => c.Name).ToList();
                         return View(contract);
                     }
 
                     var relativePath = await _fileUploadService.UploadFileAsync(signedAgreement, ContractUploadFolder);
-                    contract.SignedAgreementFilePath = "/" + relativePath.Replace('\\', '/');
+                    contract.SignedAgreementFilePath = "/" + relativePath;
                 }
 
+                contract.Status = _statusAutomationService.ResolveEffectiveStatus(contract.Status, contract.EndDate);
                 contract.CreatedDate = DateTime.UtcNow;
                 _context.Add(contract);
                 await _context.SaveChangesAsync();
+
+                TempData["Success"] = "Contract created successfully.";
                 return RedirectToAction(nameof(Index));
             }
+            catch (InvalidOperationException ex)
+            {
+                ModelState.AddModelError("signedAgreement", ex.Message);
+            }
+            catch (DbUpdateException ex)
+            {
+                _logger.LogError(ex, "Failed to save contract");
+                ModelState.AddModelError(string.Empty, "Could not save the contract. Check that SQL Server is running and the database is migrated.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error creating contract");
+                ModelState.AddModelError(string.Empty, $"Could not save the contract: {ex.Message}");
+            }
 
-            ViewBag.Clients = _context.Clients.ToList();
+            ViewBag.Clients = _context.Clients.OrderBy(c => c.Name).ToList();
             return View(contract);
         }
 
@@ -121,13 +163,17 @@ namespace EAPD7111_PART2.Controllers
                 return NotFound();
             }
 
-            ViewBag.Clients = _context.Clients.ToList();
+            ViewBag.Clients = await _context.Clients.OrderBy(c => c.Name).ToListAsync();
             return View(contract);
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("ContractId,ClientId,ContractNumber,StartDate,EndDate,Status,ServiceLevel,Description,SignedAgreementFilePath,CreatedDate")] Contract contract, IFormFile? signedAgreement)
+        [RequestSizeLimit(52_428_800)]
+        public async Task<IActionResult> Edit(
+            int id,
+            [Bind("ContractId,ClientId,ContractNumber,StartDate,EndDate,Status,ServiceLevel,Description,SignedAgreementFilePath,CreatedDate")] Contract contract,
+            IFormFile? signedAgreement)
         {
             if (id != contract.ContractId)
             {
@@ -140,47 +186,65 @@ namespace EAPD7111_PART2.Controllers
                 ModelState.AddModelError(nameof(contract.EndDate), dateRangeError);
             }
 
-            if (ModelState.IsValid)
+            if (!ModelState.IsValid)
             {
-                try
-                {
-                    if (signedAgreement != null && signedAgreement.Length > 0)
-                    {
-                        if (!_fileUploadService.ValidateFile(signedAgreement, AllowedPdfExtensions))
-                        {
-                            ModelState.AddModelError("signedAgreement", "Only PDF files are allowed.");
-                            ViewBag.Clients = _context.Clients.ToList();
-                            return View(contract);
-                        }
-
-                        if (!string.IsNullOrEmpty(contract.SignedAgreementFilePath))
-                        {
-                            DeletePhysicalFile(contract.SignedAgreementFilePath);
-                        }
-
-                        var relativePath = await _fileUploadService.UploadFileAsync(signedAgreement, ContractUploadFolder);
-                        contract.SignedAgreementFilePath = "/" + relativePath.Replace('\\', '/');
-                    }
-
-                    contract.Status = _statusAutomationService.ResolveEffectiveStatus(contract.Status, contract.EndDate);
-                    contract.ModifiedDate = DateTime.UtcNow;
-                    _context.Update(contract);
-                    await _context.SaveChangesAsync();
-                }
-                catch (DbUpdateConcurrencyException)
-                {
-                    if (!ContractExists(contract.ContractId))
-                    {
-                        return NotFound();
-                    }
-
-                    throw;
-                }
-
-                return RedirectToAction(nameof(Index));
+                ViewBag.Clients = await _context.Clients.OrderBy(c => c.Name).ToListAsync();
+                return View(contract);
             }
 
-            ViewBag.Clients = _context.Clients.ToList();
+            try
+            {
+                if (signedAgreement != null && signedAgreement.Length > 0)
+                {
+                    if (!_fileUploadService.ValidateFile(signedAgreement, AllowedPdfExtensions))
+                    {
+                        ModelState.AddModelError("signedAgreement", "Only PDF files are allowed.");
+                        ViewBag.Clients = await _context.Clients.OrderBy(c => c.Name).ToListAsync();
+                        return View(contract);
+                    }
+
+                    if (!string.IsNullOrEmpty(contract.SignedAgreementFilePath))
+                    {
+                        DeletePhysicalFile(contract.SignedAgreementFilePath);
+                    }
+
+                    var relativePath = await _fileUploadService.UploadFileAsync(signedAgreement, ContractUploadFolder);
+                    contract.SignedAgreementFilePath = "/" + relativePath;
+                }
+
+                contract.Status = _statusAutomationService.ResolveEffectiveStatus(contract.Status, contract.EndDate);
+                contract.ModifiedDate = DateTime.UtcNow;
+                _context.Update(contract);
+                await _context.SaveChangesAsync();
+
+                TempData["Success"] = "Contract updated successfully.";
+                return RedirectToAction(nameof(Index));
+            }
+            catch (InvalidOperationException ex)
+            {
+                ModelState.AddModelError("signedAgreement", ex.Message);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                if (!ContractExists(contract.ContractId))
+                {
+                    return NotFound();
+                }
+
+                throw;
+            }
+            catch (DbUpdateException ex)
+            {
+                _logger.LogError(ex, "Failed to update contract");
+                ModelState.AddModelError(string.Empty, "Could not update the contract. Check database connection.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error updating contract");
+                ModelState.AddModelError(string.Empty, $"Could not update the contract: {ex.Message}");
+            }
+
+            ViewBag.Clients = await _context.Clients.OrderBy(c => c.Name).ToListAsync();
             return View(contract);
         }
 
@@ -215,9 +279,10 @@ namespace EAPD7111_PART2.Controllers
                 }
 
                 _context.Contracts.Remove(contract);
+                await _context.SaveChangesAsync();
+                TempData["Success"] = "Contract deleted successfully.";
             }
 
-            await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Index));
         }
 
@@ -238,18 +303,21 @@ namespace EAPD7111_PART2.Controllers
             try
             {
                 var fileBytes = _fileUploadService.DownloadFile(relativePath);
-                var fileName = Path.GetFileName(relativePath);
+                var fileName = $"Contract_{contract.ContractNumber}.pdf";
                 return File(fileBytes, "application/pdf", fileName);
             }
             catch (FileNotFoundException)
             {
-                return NotFound();
+                TempData["Error"] = "The signed agreement file could not be found on the server.";
+                return RedirectToAction(nameof(Details), new { id });
             }
         }
 
         private void DeletePhysicalFile(string webRelativePath)
         {
-            var filePath = Path.Combine(_webHostEnvironment.WebRootPath, webRelativePath.TrimStart('/'));
+            var webRoot = _webHostEnvironment.WebRootPath
+                ?? Path.Combine(_webHostEnvironment.ContentRootPath, "wwwroot");
+            var filePath = Path.Combine(webRoot, webRelativePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
             if (System.IO.File.Exists(filePath))
             {
                 System.IO.File.Delete(filePath);
