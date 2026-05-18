@@ -1,0 +1,10 @@
+@{
+    ViewData["Title"] = "Error";
+}
+
+<div class="alert alert-danger">
+    <h2>Something went wrong</h2>
+    <p>An unexpected error occurred. If you are setting up GLMS for the first time, ensure SQL Server LocalDB is installed and run:</p>
+    <pre>dotnet ef database update</pre>
+    <p><a asp-controller="Home" asp-action="Index" class="btn btn-primary">Return to Home</a></p>
+</div>

@@ -9,7 +9,8 @@ namespace EAPD7111_PART2.Controllers
             return View();
         }
 
-        public IActionResult About()
+        [Route("Home/Error")]
+        public IActionResult Error()
         {
             return View();
         }
