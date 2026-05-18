@@ -1,0 +1,41 @@
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace EAPD7111_PART2.Models
+{
+    public class Client
+    {
+        [Key]
+        public int ClientId { get; set; }
+
+        [Required]
+        [StringLength(100)]
+        public string Name { get; set; } = string.Empty;
+
+        [Required]
+        [EmailAddress]
+        [StringLength(100)]
+        public string Email { get; set; } = string.Empty;
+
+        [Required]
+        [Phone]
+        [StringLength(20)]
+        public string PhoneNumber { get; set; } = string.Empty;
+
+        [Required]
+        [StringLength(200)]
+        public string Address { get; set; } = string.Empty;
+
+        [Required]
+        [StringLength(50)]
+        public string Region { get; set; } = string.Empty;
+
+        [StringLength(100)]
+        public string? ContactPerson { get; set; }
+
+        public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
+
+        // Navigation property
+        public ICollection<Contract> Contracts { get; set; } = new List<Contract>();
+    }
+}

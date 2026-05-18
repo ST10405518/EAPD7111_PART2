@@ -1,0 +1,42 @@
+@{
+    ViewData["Title"] = "Home";
+}
+
+<div class="jumbotron">
+    <h1 style="font-size: 3rem; margin-bottom: 1rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+        Welcome to GLMS
+    </h1>
+    <p style="font-size: 1.25rem; color: #666; margin-bottom: 2rem;">
+        Global Logistics Management System for TechMove Logistics
+    </p>
+    <hr style="border: none; height: 2px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin: 2rem 0; opacity: 0.3;">
+    <p style="font-size: 1.1rem; color: #555; line-height: 1.8; margin-bottom: 3rem;">
+        Manage clients, contracts, and service requests with our enterprise-grade logistics platform designed for efficiency and scalability.
+    </p>
+    <div class="row">
+        <div class="col-md-4 mb-4">
+            <div class="hero-card">
+                <div style="font-size: 3rem; margin-bottom: 1rem;">👥</div>
+                <h5>Clients</h5>
+                <p>Manage client information, contact details, and regional data with ease.</p>
+                <a asp-controller="Client" asp-action="Index" class="btn btn-primary" style="width: 100%;">Manage Clients</a>
+            </div>
+        </div>
+        <div class="col-md-4 mb-4">
+            <div class="hero-card">
+                <div style="font-size: 3rem; margin-bottom: 1rem;">📋</div>
+                <h5>Contracts</h5>
+                <p>Track contracts, SLAs, signed agreements, and automate status management.</p>
+                <a asp-controller="Contract" asp-action="Index" class="btn btn-primary" style="width: 100%;">Manage Contracts</a>
+            </div>
+        </div>
+        <div class="col-md-4 mb-4">
+            <div class="hero-card">
+                <div style="font-size: 3rem; margin-bottom: 1rem;">📦</div>
+                <h5>Service Requests</h5>
+                <p>Create and track service requests with automatic currency conversion and validation.</p>
+                <a asp-controller="ServiceRequest" asp-action="Index" class="btn btn-primary" style="width: 100%;">Manage Requests</a>
+            </div>
+        </div>
+    </div>
+</div>

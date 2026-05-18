@@ -1,0 +1,93 @@
+@model IEnumerable<EAPD7111_PART2.Models.Contract>
+
+@{
+    ViewData["Title"] = "Contracts";
+}
+
+<div style="margin-bottom: 2rem;">
+    <h1 style="font-size: 2.5rem; margin-bottom: 0.5rem;">📋 Contracts</h1>
+    <p style="color: #666;">Manage contracts, SLAs, and signed agreements</p>
+</div>
+
+<div style="margin-bottom: 2rem;">
+    <a asp-action="Create" class="btn btn-primary">➕ Create New Contract</a>
+</div>
+
+<!-- Filter Form -->
+<div class="filter-card">
+    <form asp-action="Index" method="get" style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end;">
+        <div style="flex: 1; min-width: 200px;">
+            <label class="form-label">Start Date</label>
+            <input type="date" name="startDate" class="form-control" value="@ViewBag.StartDate" />
+        </div>
+        <div style="flex: 1; min-width: 200px;">
+            <label class="form-label">End Date</label>
+            <input type="date" name="endDate" class="form-control" value="@ViewBag.EndDate" />
+        </div>
+        <div style="flex: 1; min-width: 200px;">
+            <label class="form-label">Status</label>
+            <select name="status" class="form-select">
+                <option value="">All Statuses</option>
+                <option value="0" selected="@(ViewBag.Status == ContractStatus.Draft)">📝 Draft</option>
+                <option value="1" selected="@(ViewBag.Status == ContractStatus.Active)">✅ Active</option>
+                <option value="2" selected="@(ViewBag.Status == ContractStatus.Expired)">❌ Expired</option>
+                <option value="3" selected="@(ViewBag.Status == ContractStatus.OnHold)">⏸️ On Hold</option>
+            </select>
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+            <button type="submit" class="btn btn-primary">🔍 Filter</button>
+            <a asp-action="Index" class="btn btn-secondary">🔄 Clear</a>
+        </div>
+    </form>
+</div>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>@Html.DisplayNameFor(model => model.ContractNumber)</th>
+            <th>Client</th>
+            <th>@Html.DisplayNameFor(model => model.StartDate)</th>
+            <th>@Html.DisplayNameFor(model => model.EndDate)</th>
+            <th>@Html.DisplayNameFor(model => model.Status)</th>
+            <th>@Html.DisplayNameFor(model => model.ServiceLevel)</th>
+            <th>Agreement</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var item in Model)
+        {
+            <tr>
+                <td>@Html.DisplayFor(modelItem => item.ContractNumber)</td>
+                <td>@item.Client?.Name</td>
+                <td>@Html.DisplayFor(modelItem => item.StartDate)</td>
+                <td>@Html.DisplayFor(modelItem => item.EndDate)</td>
+                <td>
+                    <span class="badge" style="background: @(item.Status == ContractStatus.Active ? "linear-gradient(135deg, #28a745 0%, #20c997 100%)" : 
+                                         item.Status == ContractStatus.Expired ? "linear-gradient(135deg, #dc3545 0%, #c82333 100%)" : 
+                                         item.Status == ContractStatus.OnHold ? "linear-gradient(135deg, #ffc107 0%, #e0a800 100%)" : "linear-gradient(135deg, #6c757d 0%, #495057 100%)"); color: white;">
+                        @(item.Status == ContractStatus.Active ? "✅ Active" : 
+                          item.Status == ContractStatus.Expired ? "❌ Expired" : 
+                          item.Status == ContractStatus.OnHold ? "⏸️ On Hold" : "📝 Draft")
+                    </span>
+                </td>
+                <td>@Html.DisplayFor(modelItem => item.ServiceLevel)</td>
+                <td>
+                    @if (!string.IsNullOrEmpty(item.SignedAgreementFilePath))
+                    {
+                        <a asp-action="Download" asp-route-id="@item.ContractId" class="btn btn-sm btn-info">📥 Download</a>
+                    }
+                    else
+                    {
+                        <span style="color: #999;">No file</span>
+                    }
+                </td>
+                <td>
+                    <a asp-action="Details" asp-route-id="@item.ContractId" class="btn btn-sm btn-info">👁️ Details</a>
+                    <a asp-action="Edit" asp-route-id="@item.ContractId" class="btn btn-sm btn-warning">✏️ Edit</a>
+                    <a asp-action="Delete" asp-route-id="@item.ContractId" class="btn btn-sm btn-danger">🗑️ Delete</a>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>

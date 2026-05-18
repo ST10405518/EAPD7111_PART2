@@ -1,0 +1,56 @@
+@model IEnumerable<EAPD7111_PART2.Models.ServiceRequest>
+
+@{
+    ViewData["Title"] = "Service Requests";
+}
+
+<div style="margin-bottom: 2rem;">
+    <h1 style="font-size: 2.5rem; margin-bottom: 0.5rem;">📦 Service Requests</h1>
+    <p style="color: #666;">Track and manage service requests with automatic currency conversion</p>
+</div>
+
+<p style="margin-bottom: 2rem;">
+    <a asp-action="Create" class="btn btn-primary">➕ Create New Service Request</a>
+</p>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>@Html.DisplayNameFor(model => model.RequestNumber)</th>
+            <th>Contract</th>
+            <th>Client</th>
+            <th>@Html.DisplayNameFor(model => model.Description)</th>
+            <th>@Html.DisplayNameFor(model => model.CostUSD)</th>
+            <th>@Html.DisplayNameFor(model => model.CostZAR)</th>
+            <th>@Html.DisplayNameFor(model => model.Status)</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var item in Model)
+        {
+            <tr>
+                <td>@Html.DisplayFor(modelItem => item.RequestNumber)</td>
+                <td>@item.Contract?.ContractNumber</td>
+                <td>@item.Contract?.Client?.Name</td>
+                <td>@Html.DisplayFor(modelItem => item.Description)</td>
+                <td style="font-weight: 600; color: #667eea;">$@item.CostUSD.ToString("N2")</td>
+                <td style="font-weight: 600; color: #764ba2;">R@item.CostZAR.ToString("N2")</td>
+                <td>
+                    <span class="badge" style="background: @(item.Status == ServiceRequestStatus.Completed ? "linear-gradient(135deg, #28a745 0%, #20c997 100%)" : 
+                                         item.Status == ServiceRequestStatus.InProgress ? "linear-gradient(135deg, #007bff 0%, #0056b3 100%)" : 
+                                         item.Status == ServiceRequestStatus.Cancelled ? "linear-gradient(135deg, #dc3545 0%, #c82333 100%)" : "linear-gradient(135deg, #ffc107 0%, #e0a800 100%)"); color: white;">
+                        @(item.Status == ServiceRequestStatus.Completed ? "✅ Completed" : 
+                          item.Status == ServiceRequestStatus.InProgress ? "🔄 In Progress" : 
+                          item.Status == ServiceRequestStatus.Cancelled ? "❌ Cancelled" : "⏳ Pending")
+                    </span>
+                </td>
+                <td>
+                    <a asp-action="Details" asp-route-id="@item.ServiceRequestId" class="btn btn-sm btn-info">👁️ Details</a>
+                    <a asp-action="Edit" asp-route-id="@item.ServiceRequestId" class="btn btn-sm btn-warning">✏️ Edit</a>
+                    <a asp-action="Delete" asp-route-id="@item.ServiceRequestId" class="btn btn-sm btn-danger">🗑️ Delete</a>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
