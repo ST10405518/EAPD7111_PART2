@@ -308,15 +308,6 @@ Record a walkthrough covering:
 7. **Auto-expire** — create Active contract with end date in the past, open contract list, show status changed to Expired  
 8. **Tests** — run `dotnet test` or Test Explorer, show all passed  
 
----
-
-## Submission checklist
-
-- [ ] Push full solution to **GitHub** (include `EAPD7111_PART2.Tests` and `Migrations/`)  
-- [ ] Submit GitHub link on **ARC**  
-- [ ] Attach **Test Explorer** screenshots (all tests passing)  
-- [ ] Include **migration scripts** (folder `Migrations/`)  
-- [ ] Upload **video** demonstrating the flows above  
 
 ---
 
