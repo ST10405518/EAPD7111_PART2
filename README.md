@@ -324,12 +324,27 @@ Record a walkthrough covering:
 
 | Issue | Solution |
 |-------|----------|
+| **Cannot copy `EAPD7111_PART2.exe` — file in use** | The app is still running. In Visual Studio click **Stop** (Shift+F5), or close the browser tab, or open Task Manager and end **EAPD7111_PART2.exe**, then rebuild. |
+| **Visual Studio does not support .NET 10** | Ensure `EAPD7111_PART2.Tests` targets **net9.0** (not net10.0). Pull latest from GitHub or set `<TargetFramework>net9.0</TargetFramework>` in the test `.csproj`. |
 | Cannot connect to database | Verify SQL Server/LocalDB is running; update `appsettings.json` connection string |
 | `dotnet ef` not found | Run `dotnet tool install --global dotnet-ef` |
 | Exchange rate shows fallback 18.50 | No internet or API down; app still works with fallback |
 | PDF upload fails | Only `.pdf` extension allowed; check `wwwroot/uploads/contracts/` exists |
 | Tests not visible in VS | Open `EAPD7111_PART2.sln`, build solution, open Test Explorer |
 | macOS LocalDB error | Use Docker SQL Server and update connection string |
+
+### File locked during build (Windows)
+
+If you see `The file is locked by: "EAPD7111_PART2 (####)"`:
+
+1. **Stop debugging** in Visual Studio (red square / Shift+F5).
+2. Or run in **Developer PowerShell**:
+
+   ```powershell
+   taskkill /F /IM EAPD7111_PART2.exe
+   ```
+
+3. **Build → Clean Solution**, then **Rebuild Solution**.
 
 ---
 
