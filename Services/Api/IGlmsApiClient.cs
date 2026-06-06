@@ -59,4 +59,5 @@ public interface IGlmsApiClient
     Task DeleteServiceRequestAsync(int id, CancellationToken cancellationToken = default);
 
     Task<ExchangeRateResponse> GetExchangeRateAsync(CancellationToken cancellationToken = default);
+    Task<bool> IsApiReachableAsync(CancellationToken cancellationToken = default);
 }

@@ -174,6 +174,21 @@ public class GlmsApiClient : IGlmsApiClient
         return await ReadRequiredAsync<ExchangeRateResponse>(response, cancellationToken);
     }
 
+    public async Task<bool> IsApiReachableAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(TimeSpan.FromSeconds(5));
+            var response = await _httpClient.GetAsync("api/health", cts.Token);
+            return response.IsSuccessStatusCode;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private static MultipartFormDataContent BuildContractFormContent(object contract, IFormFile? signedAgreement)
     {
         var content = new MultipartFormDataContent();

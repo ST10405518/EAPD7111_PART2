@@ -9,6 +9,13 @@
     <div class="col-md-6">
         <form asp-action="Login" method="post">
             <input type="hidden" name="returnUrl" value="@ViewData["ReturnUrl"]" />
+            @if (ViewBag.ApiOnline == false)
+            {
+                <div class="alert alert-warning" role="alert">
+                    <strong>API offline.</strong> @ViewBag.ApiWarning
+                    <br /><small>Run: <code>dotnet run --project GLMS.Api</code></small>
+                </div>
+            }
             <div asp-validation-summary="All" class="text-danger mb-3"></div>
             <div class="form-group mb-3">
                 <label asp-for="Username" class="control-label"></label>

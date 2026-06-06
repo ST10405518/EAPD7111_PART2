@@ -1,0 +1,6 @@
+@echo off
+echo Starting GLMS API on http://localhost:8080 ...
+start "GLMS API" cmd /k dotnet run --project GLMS.Api\GLMS.Api.csproj --launch-profile GLMS.Api
+timeout /t 8 /nobreak >nul
+echo Starting GLMS MVC on https://localhost:7159 ...
+dotnet run --project EAPD7111_PART2.csproj --launch-profile EAPD7111_PART2
