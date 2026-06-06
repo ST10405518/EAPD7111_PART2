@@ -28,8 +28,14 @@ public class ServiceRequestController : Controller
         }
         catch (ApiClientException ex)
         {
-            _logger.LogError(ex, "Failed to load service requests");
-            TempData["Error"] = "Could not load service requests from the API. Please sign in and try again.";
+            var unauthorized = ApiErrorHelper.HandleUnauthorized(this, ex);
+            if (unauthorized != null)
+            {
+                return unauthorized;
+            }
+
+            _logger.LogError(ex, "Failed to load service requests. Status={StatusCode}", ex.StatusCode);
+            TempData["Error"] = ApiErrorHelper.GetUserMessage(ex, "Could not load service requests from the API.");
             return View(Array.Empty<ServiceRequest>());
         }
     }

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using GLMS.Shared.Dtos;
 using GLMS.Shared.Models;
 using Microsoft.AspNetCore.Http;
@@ -11,7 +12,8 @@ public class GlmsApiClient : IGlmsApiClient
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
-        PropertyNameCaseInsensitive = true
+        PropertyNameCaseInsensitive = true,
+        Converters = { new JsonStringEnumConverter() }
     };
 
     private readonly HttpClient _httpClient;

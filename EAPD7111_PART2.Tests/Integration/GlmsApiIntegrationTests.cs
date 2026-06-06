@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using GLMS.Api;
 using GLMS.Shared.Dtos;
 using GLMS.Shared.Models;
@@ -10,6 +12,12 @@ namespace EAPD7111_PART2.Tests.Integration;
 
 public class GlmsApiIntegrationTests : IClassFixture<GlmsApiWebApplicationFactory>
 {
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        Converters = { new JsonStringEnumConverter() }
+    };
+
     private readonly GlmsApiWebApplicationFactory _factory;
 
     public GlmsApiIntegrationTests(GlmsApiWebApplicationFactory factory)
@@ -118,6 +126,59 @@ public class GlmsApiIntegrationTests : IClassFixture<GlmsApiWebApplicationFactor
         Assert.Equal(HttpStatusCode.OK, patchResponse.StatusCode);
         var updated = await patchResponse.Content.ReadFromJsonAsync<Contract>();
         Assert.Equal(ContractStatus.Active, updated!.Status);
+    }
+
+    [Fact]
+    public async Task GetClientById_WithContracts_ReturnsOkAndDeserializes()
+    {
+        var client = await CreateAuthenticatedClientAsync();
+        var createResponse = await client.PostAsJsonAsync("/api/clients", new Client
+        {
+            Name = "Nested Client",
+            Email = "nested@test.com",
+            PhoneNumber = "078 840 8161",
+            Address = "Nested Address",
+            Region = "Gauteng"
+        });
+        var createdClient = await createResponse.Content.ReadFromJsonAsync<Client>(JsonOptions);
+        Assert.NotNull(createdClient);
+
+        using var contractForm = new MultipartFormDataContent
+        {
+            { new StringContent(createdClient!.ClientId.ToString()), "ClientId" },
+            { new StringContent("NEST-001"), "ContractNumber" },
+            { new StringContent(DateTime.Today.ToString("O")), "StartDate" },
+            { new StringContent(DateTime.Today.AddYears(1).ToString("O")), "EndDate" },
+            { new StringContent(ContractStatus.Active.ToString()), "Status" },
+            { new StringContent("Gold SLA"), "ServiceLevel" }
+        };
+
+        var createContract = await client.PostAsync("/api/contracts", contractForm);
+        Assert.Equal(HttpStatusCode.Created, createContract.StatusCode);
+
+        var getResponse = await client.GetAsync($"/api/clients/{createdClient.ClientId}");
+        Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+
+        var fetched = await getResponse.Content.ReadFromJsonAsync<Client>(JsonOptions);
+        Assert.NotNull(fetched);
+        Assert.NotEmpty(fetched!.Contracts);
+    }
+
+    [Fact]
+    public async Task GetServiceRequests_WithNestedContract_ReturnsOkAndDeserializes()
+    {
+        var client = await CreateAuthenticatedClientAsync();
+        var contractsResponse = await client.GetAsync("/api/contracts");
+        Assert.Equal(HttpStatusCode.OK, contractsResponse.StatusCode);
+
+        var contracts = await contractsResponse.Content.ReadFromJsonAsync<List<Contract>>(JsonOptions);
+        Assert.NotNull(contracts);
+
+        var serviceRequestsResponse = await client.GetAsync("/api/servicerequests");
+        Assert.Equal(HttpStatusCode.OK, serviceRequestsResponse.StatusCode);
+
+        var serviceRequests = await serviceRequestsResponse.Content.ReadFromJsonAsync<List<ServiceRequest>>(JsonOptions);
+        Assert.NotNull(serviceRequests);
     }
 
     [Fact]

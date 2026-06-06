@@ -156,6 +156,75 @@ public class ContractsController : ControllerBase
         return Ok(contract);
     }
 
+    [HttpPut("{id:int}")]
+    [RequestSizeLimit(52_428_800)]
+    public async Task<ActionResult<Contract>> Update(
+        int id,
+        [FromForm] CreateContractDto dto,
+        [FromForm] string? signedAgreementFilePath,
+        [FromForm] DateTime? createdDate,
+        IFormFile? signedAgreement,
+        CancellationToken cancellationToken)
+    {
+        var contract = await _contractRepository.GetByIdAsync(id, cancellationToken);
+        if (contract == null)
+        {
+            return NotFound(new { message = $"Contract {id} not found." });
+        }
+
+        var dateRangeError = ContractValidationService.GetDateRangeErrorMessage(dto.StartDate, dto.EndDate);
+        if (dateRangeError != null)
+        {
+            return BadRequest(new { message = dateRangeError });
+        }
+
+        if (!await _clientRepository.ExistsAsync(dto.ClientId, cancellationToken))
+        {
+            return BadRequest(new { message = $"Client {dto.ClientId} not found." });
+        }
+
+        contract.ClientId = dto.ClientId;
+        contract.ContractNumber = dto.ContractNumber;
+        contract.StartDate = dto.StartDate;
+        contract.EndDate = dto.EndDate;
+        contract.Status = dto.Status;
+        contract.ServiceLevel = dto.ServiceLevel;
+        contract.Description = dto.Description;
+        contract.ModifiedDate = DateTime.UtcNow;
+
+        try
+        {
+            if (signedAgreement != null && signedAgreement.Length > 0)
+            {
+                if (!_fileUploadService.ValidateFile(signedAgreement, AllowedPdfExtensions))
+                {
+                    return BadRequest(new { message = "Only PDF files are allowed." });
+                }
+
+                if (!string.IsNullOrEmpty(contract.SignedAgreementFilePath))
+                {
+                    DeletePhysicalFile(contract.SignedAgreementFilePath);
+                }
+
+                var relativePath = await _fileUploadService.UploadFileAsync(signedAgreement, ContractUploadFolder);
+                contract.SignedAgreementFilePath = "/" + relativePath;
+            }
+
+            contract.Status = _statusAutomationService.ResolveEffectiveStatus(contract.Status, contract.EndDate);
+            await _contractRepository.UpdateAsync(contract, cancellationToken);
+            return Ok(contract);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to update contract {ContractId}", id);
+            return BadRequest(new { message = "Could not update the contract." });
+        }
+    }
+
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken)
     {

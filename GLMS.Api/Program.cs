@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json.Serialization;
 using GLMS.Api.Data;
 using GLMS.Api.Repositories;
 using GLMS.Api.Services;
@@ -20,7 +21,12 @@ builder.WebHost.ConfigureKestrel(options =>
     options.Limits.MaxRequestBodySize = 52_428_800;
 });
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {

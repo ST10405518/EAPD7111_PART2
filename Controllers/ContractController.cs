@@ -33,8 +33,14 @@ public class ContractController : Controller
         }
         catch (ApiClientException ex)
         {
-            _logger.LogError(ex, "Failed to load contracts");
-            TempData["Error"] = "Could not load contracts from the API. Please sign in and try again.";
+            var unauthorized = ApiErrorHelper.HandleUnauthorized(this, ex);
+            if (unauthorized != null)
+            {
+                return unauthorized;
+            }
+
+            _logger.LogError(ex, "Failed to load contracts. Status={StatusCode}", ex.StatusCode);
+            TempData["Error"] = ApiErrorHelper.GetUserMessage(ex, "Could not load contracts from the API.");
             return View(Array.Empty<Contract>());
         }
     }
@@ -58,8 +64,14 @@ public class ContractController : Controller
         }
         catch (ApiClientException ex)
         {
-            _logger.LogError(ex, "Failed to load contract {ContractId}", id);
-            TempData["Error"] = "Could not load contract details from the API.";
+            var unauthorized = ApiErrorHelper.HandleUnauthorized(this, ex);
+            if (unauthorized != null)
+            {
+                return unauthorized;
+            }
+
+            _logger.LogError(ex, "Failed to load contract {ContractId}. Status={StatusCode}", id, ex.StatusCode);
+            TempData["Error"] = ApiErrorHelper.GetUserMessage(ex, "Could not load contract details from the API.");
             return RedirectToAction(nameof(Index));
         }
     }
