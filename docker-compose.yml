@@ -1,0 +1,52 @@
+services:
+  sql-server-db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: glms-sql-server-db
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "YourStrong!Passw0rd"
+    ports:
+      - "1433:1433"
+    volumes:
+      - glms-sql-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 1 bash -c '</dev/tcp/127.0.0.1/1433' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 40s
+
+  glms-backend-api:
+    build:
+      context: .
+      dockerfile: GLMS.Api/Dockerfile
+    container_name: glms-backend-api
+    depends_on:
+      - sql-server-db
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: "Server=sql-server-db;Database=GLMSDb;User Id=sa;Password=YourStrong!Passw0rd;TrustServerCertificate=True;MultipleActiveResultSets=true"
+      Jwt__Key: "GLMS-Super-Secret-JWT-Key-For-TechMove-Logistics-2026!"
+      Jwt__Issuer: "GLMS.Api"
+      Jwt__Audience: "GLMS.Web"
+    ports:
+      - "8080:8080"
+    volumes:
+      - glms-uploads:/app/wwwroot/uploads
+
+  glms-frontend-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: glms-frontend-web
+    depends_on:
+      - glms-backend-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ApiSettings__BaseUrl: "http://glms-backend-api:8080"
+    ports:
+      - "8081:8081"
+
+volumes:
+  glms-sql-data:
+  glms-uploads:

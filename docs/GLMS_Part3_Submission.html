@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>GLMS Part 3 - Submission Document</title>
+<style>
+body { font-family: Calibri, Arial, sans-serif; line-height: 1.6; max-width: 800px; margin: 40px auto; padding: 20px; }
+h1 { color: #0f4c81; border-bottom: 2px solid #0f4c81; padding-bottom: 8px; }
+h2 { color: #333; margin-top: 24px; }
+table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+td, th { border: 1px solid #ccc; padding: 8px; text-align: left; }
+th { background: #f0f0f0; }
+</style>
+</head>
+<body>
+
+<h1>Global Logistics Management System (GLMS)</h1>
+<h2>Part 3 Submission — TechMove Logistics</h2>
+
+<p><strong>Student:</strong> [Your Name]<br>
+<strong>Student Number:</strong> ST10405518<br>
+<strong>Module:</strong> EAPD7111 — Enterprise Application Development<br>
+<strong>GitHub Repository:</strong> https://github.com/ST10405518/EAPD7111_PART2</p>
+
+<h2>1. Project Overview</h2>
+<p>This submission delivers Part 3 of the GLMS platform. The monolith from Part 2 has been refactored into a Service-Oriented Architecture (SOA) with three Docker containers: SQL Server database, ASP.NET Core Web API backend, and ASP.NET Core MVC frontend.</p>
+
+<h2>2. Solution Structure</h2>
+<table>
+<tr><th>Project</th><th>Role</th></tr>
+<tr><td>GLMS.Shared</td><td>Shared models and DTOs</td></tr>
+<tr><td>GLMS.Api</td><td>Web API — database, business logic, JWT auth, Swagger</td></tr>
+<tr><td>EAPD7111_PART2</td><td>MVC frontend — calls API via HttpClient only</td></tr>
+<tr><td>EAPD7111_PART2.Tests</td><td>Unit tests + API integration tests</td></tr>
+</table>
+
+<h2>3. How to Run with Docker</h2>
+<ol>
+<li>Install Docker Desktop</li>
+<li>Open terminal in project folder</li>
+<li>Run: <code>docker compose up --build</code></li>
+<li>Open browser: <strong>http://localhost:8081</strong> (MVC frontend)</li>
+<li>API Swagger: <strong>http://localhost:8080/swagger</strong></li>
+<li>Login: username <strong>admin</strong>, password <strong>Admin@123</strong></li>
+</ol>
+
+<h2>4. API Endpoints (Summary)</h2>
+<ul>
+<li>POST /api/auth/login — JWT authentication</li>
+<li>GET/POST/PUT/DELETE /api/clients — Client management</li>
+<li>GET/POST/PATCH/DELETE /api/contracts — Contract management with filtering</li>
+<li>PATCH /api/contracts/{id}/status — Approve/decline contract status</li>
+<li>GET/POST/PUT/DELETE /api/servicerequests — Service requests with USD→ZAR</li>
+<li>GET /api/servicerequests/exchange-rate — Live exchange rate</li>
+</ul>
+
+<h2>5. Testing</h2>
+<p>Run unit and integration tests in Visual Studio Test Explorer or:</p>
+<p><code>dotnet test EAPD7111_PART2.Tests/EAPD7111_PART2.Tests.csproj</code></p>
+<p>Integration tests call live API endpoints using WebApplicationFactory and assert HTTP 200/201 status codes and data integrity.</p>
+
+<h2>6. Contact Details</h2>
+<p>Phone: 078 840 8161<br>Email: info@techmove.com</p>
+
+<h2>7. Submission Checklist</h2>
+<ul>
+<li>☑ Full source code on GitHub</li>
+<li>☑ Dockerfile for API and MVC</li>
+<li>☑ docker-compose.yml</li>
+<li>☐ Screenshots of Docker Desktop running</li>
+<li>☐ PDF Technical Reflection Report</li>
+<li>☐ Video demonstration</li>
+</ul>
+
+<p><em>Open this file in Microsoft Word and Save As .docx for submission.</em></p>
+
+</body>
+</html>

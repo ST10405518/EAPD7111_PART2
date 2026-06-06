@@ -1,4 +1,4 @@
-using EAPD7111_PART2.Services;
+using GLMS.Api.Services;
 using EAPD7111_PART2.Tests.Helpers;
 using Microsoft.AspNetCore.Hosting;
 using Moq;

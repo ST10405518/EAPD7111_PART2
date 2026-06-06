@@ -1,5 +1,5 @@
-using EAPD7111_PART2.Models;
-using EAPD7111_PART2.Services;
+using GLMS.Shared.Models;
+using GLMS.Api.Services;
 
 namespace EAPD7111_PART2.Tests.Services
 {

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>GLMS Part 3 - Technical Reflection Report</title>
+<style>
+body { font-family: Calibri, Arial, sans-serif; line-height: 1.8; max-width: 800px; margin: 40px auto; padding: 20px; color: #222; }
+h1 { color: #0f4c81; }
+h2 { color: #333; margin-top: 28px; }
+</style>
+</head>
+<body>
+
+<h1>Technical Reflection Report</h1>
+<h2>GLMS Part 3 — DevOps, Testing &amp; Containerization</h2>
+
+<p><strong>Author:</strong> [Your Name] | ST10405518<br>
+<strong>Institution:</strong> [Your Institution]<br>
+<strong>Date:</strong> June 2026</p>
+
+<h2>1. Introduction</h2>
+<p>Part 3 modernised the Global Logistics Management System (GLMS) from a monolithic ASP.NET Core MVC application into a decoupled, containerised, service-oriented platform. The presentation layer (MVC) no longer accesses SQL Server directly; all data operations flow through a RESTful Web API secured with JWT authentication.</p>
+
+<h2>2. Architectural Refactoring</h2>
+<p>The Repository and Service patterns from Part 2 were preserved and relocated entirely to the API layer. The MVC application acts as a thin client, using HttpClient to consume JSON endpoints. This separation of concerns allows the frontend and backend to scale independently — for example, multiple MVC instances can share one API cluster behind a load balancer.</p>
+<p>Key design decisions included a shared class library (GLMS.Shared) for domain models and DTOs, ensuring type consistency between API and MVC without duplicating code.</p>
+
+<h2>3. DevOps &amp; Automated Testing in CI/CD</h2>
+<p>Automated testing is critical in a Continuous Integration/Continuous Deployment (CI/CD) pipeline because it provides fast, repeatable verification that code changes have not broken existing functionality. Without automated tests, developers rely on manual testing, which is slow, inconsistent, and often skipped under deadline pressure.</p>
+<p>In a typical CI/CD workflow (e.g., GitHub Actions or Azure DevOps), every pull request triggers:</p>
+<ul>
+<li><strong>Unit tests</strong> — validate business logic in isolation (currency conversion, file validation, contract workflow rules).</li>
+<li><strong>Integration tests</strong> — spin up the API in-memory and call real HTTP endpoints, asserting status codes (200 OK, 201 Created, 401 Unauthorized) and verifying JSON response integrity.</li>
+</ul>
+<p>Integration tests are especially valuable because they catch wiring errors — incorrect routes, missing authentication, broken serialization — that unit tests cannot detect. If a developer changes a route from <code>/api/contracts</code> to <code>/api/contract</code>, integration tests fail immediately in the pipeline, preventing the bug from reaching production.</p>
+<p>This "shift-left" approach reduces the cost of fixing defects: a bug found in CI costs minutes to fix; the same bug in production can cost hours of downtime, customer trust, and emergency hotfixes.</p>
+
+<h2>4. Containerization &amp; the "Works on My Machine" Problem</h2>
+<p>Docker solves environment inconsistency by packaging each component — database, API, and web frontend — into isolated containers with explicit dependencies, networking, and environment variables defined in <code>docker-compose.yml</code>.</p>
+<p>The classic "it works on my machine" problem occurs when developers run different OS versions, SQL Server editions, or .NET SDK versions. A feature that works locally may fail on a lecturer's machine or in production. Docker eliminates this by ensuring:</p>
+<ul>
+<li><strong>Identical runtime</strong> — same .NET 9 ASP.NET image on every machine.</li>
+<li><strong>Identical database</strong> — SQL Server 2022 container with the same SA password and connection string.</li>
+<li><strong>Identical networking</strong> — containers communicate via Docker service names (e.g., <code>glms-backend-api</code>), not localhost IPs that differ per environment.</li>
+<li><strong>Reproducible builds</strong> — multi-stage Dockerfiles compile and publish in a clean environment every time.</li>
+</ul>
+<p>Our <code>docker-compose.yml</code> orchestrates three containers: <code>sql-server-db</code>, <code>glms-backend-api</code>, and <code>glms-frontend-web</code>. A single command (<code>docker compose up --build</code>) starts the entire ecosystem, making onboarding and demonstration straightforward.</p>
+
+<h2>5. Security Considerations</h2>
+<p>JWT (JSON Web Token) authentication was implemented to secure API endpoints. The MVC frontend obtains a token via POST /api/auth/login and attaches it as a Bearer token on subsequent requests. This stateless authentication model scales well in distributed deployments and is industry standard for SOA and microservice architectures.</p>
+
+<h2>6. Conclusion</h2>
+<p>Part 3 demonstrates the evolution from prototype to production-ready architecture. Automated integration tests guard against regressions in CI/CD pipelines, while Docker ensures consistent deployment across development, testing, and production environments. Together, these practices embody modern DevOps principles and prepare GLMS for cloud-native scaling at TechMove Logistics.</p>
+
+<p><em>Save this document as PDF for ARC submission: File → Print → Save as PDF (or open in Word and Export to PDF).</em></p>
+
+</body>
+</html>

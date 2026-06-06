@@ -21,7 +21,42 @@ Enterprise ASP.NET Core MVC monolith with Entity Framework Core, SQL Server, ext
 12. [Demonstration workflow (for video)](#demonstration-workflow-for-video)
 13. [Submission checklist](#submission-checklist)
 14. [Troubleshooting](#troubleshooting)
-15. [Part 3 preview](#part-3-preview)
+15. [Part 3 — Docker & SOA](#part-3--docker--soa)
+
+---
+
+## Part 3 — Docker & SOA
+
+Part 3 refactors GLMS into a **Service-Oriented Architecture**:
+
+| Container | Service | Port |
+|-----------|---------|------|
+| `sql-server-db` | SQL Server 2022 | 1433 |
+| `glms-backend-api` | ASP.NET Core Web API + JWT + Swagger | 8080 |
+| `glms-frontend-web` | ASP.NET Core MVC (HttpClient only) | 8081 |
+
+### Run with Docker
+
+```bash
+docker compose up --build
+```
+
+- **MVC UI:** http://localhost:8081  
+- **Swagger API:** http://localhost:8080/swagger  
+- **Login:** admin / Admin@123  
+
+### API Endpoints
+
+- `POST /api/auth/login` — JWT token
+- `GET /api/contracts?startDate=&endDate=&status=` — filtered list
+- `POST /api/contracts` — create (multipart PDF)
+- `PATCH /api/contracts/{id}/status` — update status
+- Full CRUD for clients and service requests
+
+### Submission documents
+
+- `docs/GLMS_Part3_Submission.html` — open in Word, save as .docx
+- `docs/GLMS_Part3_Technical_Reflection_Report.html` — save as PDF for ARC
 
 ---
 
@@ -339,13 +374,6 @@ If you see `The file is locked by: "EAPD7111_PART2 (####)"`:
 
 ---
 
-## Part 3 preview
-
-Part 3 will refactor this monolith into **containerised microservices** (Docker), expose APIs, and extend testing. The domain model and business rules in `Services/` are intentionally separated to support that migration.
-
----
-
-## Author
 
 EAPD7111 — Enterprise Application Development  
 TechMove Logistics GLMS PoE Part 2

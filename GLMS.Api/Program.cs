@@ -130,3 +130,5 @@ app.MapControllers();
 app.Logger.LogInformation("GLMS API is running on port 8080");
 
 app.Run();
+
+public partial class Program { }
