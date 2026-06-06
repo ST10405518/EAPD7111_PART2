@@ -747,6 +747,25 @@
                             <i class="fas fa-boxes-stacked"></i> Service Requests
                         </a>
                     </li>
+                    @if (Context.Request.Cookies.ContainsKey("glms_token"))
+                    {
+                        <li class="nav-item">
+                            <form asp-controller="Account" asp-action="Logout" method="post" style="display:inline;">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="nav-link" style="background:none;border:none;cursor:pointer;">
+                                    <i class="fas fa-right-from-bracket"></i> Logout
+                                </button>
+                            </form>
+                        </li>
+                    }
+                    else
+                    {
+                        <li class="nav-item">
+                            <a asp-controller="Account" asp-action="Login" class="nav-link">
+                                <i class="fas fa-right-to-bracket"></i> Login
+                            </a>
+                        </li>
+                    }
                 </ul>
             </div>
         </nav>

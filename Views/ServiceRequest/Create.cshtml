@@ -1,5 +1,4 @@
-@model EAPD7111_PART2.Models.ServiceRequest
-@using EAPD7111_PART2.Services
+@model ServiceRequest
 @using Microsoft.AspNetCore.Mvc.Rendering
 
 @{
@@ -89,7 +88,7 @@
                     $('#exchangeRateInfo').text('Current USD to ZAR rate: ' + data.rate.toFixed(2));
                     calculateZAR();
                 }).fail(function() {
-                    window.exchangeRate = @CurrencyConversionService.FallbackUsdToZarRate;
+                    window.exchangeRate = 18.50;
                     $('#exchangeRateInfo').text('Using fallback rate: ' + window.exchangeRate.toFixed(2));
                     calculateZAR();
                 });
@@ -97,7 +96,7 @@
 
             function calculateZAR() {
                 var usd = parseFloat($('#costUSD').val()) || 0;
-                var zar = usd * (window.exchangeRate || @CurrencyConversionService.FallbackUsdToZarRate);
+                var zar = usd * (window.exchangeRate || 18.50);
                 $('#costZAR').val(zar.toFixed(2));
             }
         });

@@ -1,7 +1,5 @@
+using EAPD7111_PART2.Services.Api;
 using Microsoft.AspNetCore.Http.Features;
-using Microsoft.EntityFrameworkCore;
-using EAPD7111_PART2.Data;
-using EAPD7111_PART2.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,20 +13,38 @@ builder.WebHost.ConfigureKestrel(options =>
     options.Limits.MaxRequestBodySize = 52_428_800;
 });
 
+builder.Services.Configure<ApiSettings>(
+    builder.Configuration.GetSection(ApiSettings.SectionName));
+
 builder.Services.AddControllersWithViews()
     .AddRazorRuntimeCompilation();
 
-builder.Services.AddDbContext<GLMSDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddDistributedMemoryCache();
+builder.Services.AddSession(options =>
+{
+    options.IdleTimeout = TimeSpan.FromHours(8);
+    options.Cookie.HttpOnly = true;
+    options.Cookie.IsEssential = true;
+});
 
-builder.Services.AddScoped<IFileUploadService, FileUploadService>();
-builder.Services.AddScoped<IContractWorkflowService, ContractWorkflowService>();
-builder.Services.AddScoped<IContractStatusAutomationService, ContractStatusAutomationService>();
-builder.Services.AddHttpClient<ICurrencyConversionService, CurrencyConversionService>();
+builder.Services.AddAuthentication(Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.LoginPath = "/Account/Login";
+        options.LogoutPath = "/Account/Logout";
+        options.AccessDeniedPath = "/Account/Login";
+    });
 
-var webRootPath = Path.Combine(builder.Environment.ContentRootPath, "wwwroot");
-Directory.CreateDirectory(webRootPath);
-Directory.CreateDirectory(Path.Combine(webRootPath, "uploads", "contracts"));
+builder.Services.AddAuthorization();
+
+builder.Services.AddTransient<ApiTokenHandler>();
+builder.Services.AddHttpClient<IGlmsApiClient, GlmsApiClient>((serviceProvider, client) =>
+{
+    var apiSettings = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<ApiSettings>>().Value;
+    client.BaseAddress = new Uri(apiSettings.BaseUrl.TrimEnd('/') + "/");
+})
+.AddHttpMessageHandler<ApiTokenHandler>();
 
 var app = builder.Build();
 
@@ -42,29 +58,19 @@ else
     app.UseHsts();
 }
 
-try
-{
-    using var scope = app.Services.CreateScope();
-    var db = scope.ServiceProvider.GetRequiredService<GLMSDbContext>();
-    db.Database.Migrate();
-    app.Logger.LogInformation("Database migration completed successfully.");
-}
-catch (Exception ex)
-{
-    app.Logger.LogWarning(ex,
-        "Database migration failed. Data features require SQL Server LocalDB. " +
-        "Run: dotnet ef database update");
-}
-
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
+app.UseSession();
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
 
-app.Logger.LogInformation("GLMS is running. Open https://localhost:7159 or http://localhost:5064");
+app.Logger.LogInformation(
+    "GLMS MVC is running. API base URL: {ApiBaseUrl}",
+    builder.Configuration.GetSection(ApiSettings.SectionName)["BaseUrl"] ?? "http://localhost:8080");
 
 app.Run();

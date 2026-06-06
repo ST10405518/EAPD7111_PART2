@@ -1,4 +1,4 @@
-@model IEnumerable<EAPD7111_PART2.Models.ServiceRequest>
+@model IEnumerable<ServiceRequest>
 
 @{
     ViewData["Title"] = "Service Requests";
@@ -34,8 +34,8 @@
                 <td>@item.Contract?.ContractNumber</td>
                 <td>@item.Contract?.Client?.Name</td>
                 <td>@Html.DisplayFor(modelItem => item.Description)</td>
-                <td style="font-weight: 600; color: #667eea;">$@item.CostUSD.ToString("N2")</td>
-                <td style="font-weight: 600; color: #764ba2;">R@item.CostZAR.ToString("N2")</td>
+                <td style="font-weight: 600; color: #667eea;">@($"${item.CostUSD:N2}")</td>
+                <td style="font-weight: 600; color: #764ba2;">@($"R{item.CostZAR:N2}")</td>
                 <td>
                     <span class="badge" style="background: @(item.Status == ServiceRequestStatus.Completed ? "linear-gradient(135deg, #28a745 0%, #20c997 100%)" : 
                                          item.Status == ServiceRequestStatus.InProgress ? "linear-gradient(135deg, #007bff 0%, #0056b3 100%)" : 

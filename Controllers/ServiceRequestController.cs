@@ -1,53 +1,49 @@
-using EAPD7111_PART2.Data;
 using EAPD7111_PART2.Helpers;
-using EAPD7111_PART2.Models;
-using EAPD7111_PART2.Services;
+using EAPD7111_PART2.Services.Api;
+using GLMS.Shared.Dtos;
+using GLMS.Shared.Models;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
-namespace EAPD7111_PART2.Controllers
+namespace EAPD7111_PART2.Controllers;
+
+public class ServiceRequestController : Controller
 {
-    public class ServiceRequestController : Controller
+    public const decimal FallbackUsdToZarRate = 18.50m;
+
+    private readonly IGlmsApiClient _apiClient;
+    private readonly ILogger<ServiceRequestController> _logger;
+
+    public ServiceRequestController(IGlmsApiClient apiClient, ILogger<ServiceRequestController> logger)
     {
-        private readonly GLMSDbContext _context;
-        private readonly ICurrencyConversionService _currencyService;
-        private readonly IContractWorkflowService _workflowService;
-        private readonly IContractStatusAutomationService _statusAutomationService;
+        _apiClient = apiClient;
+        _logger = logger;
+    }
 
-        public ServiceRequestController(
-            GLMSDbContext context,
-            ICurrencyConversionService currencyService,
-            IContractWorkflowService workflowService,
-            IContractStatusAutomationService statusAutomationService)
+    public async Task<IActionResult> Index()
+    {
+        try
         {
-            _context = context;
-            _currencyService = currencyService;
-            _workflowService = workflowService;
-            _statusAutomationService = statusAutomationService;
+            var serviceRequests = await _apiClient.GetServiceRequestsAsync();
+            return View(serviceRequests.OrderByDescending(s => s.CreatedDate).ToList());
+        }
+        catch (ApiClientException ex)
+        {
+            _logger.LogError(ex, "Failed to load service requests");
+            TempData["Error"] = "Could not load service requests from the API. Please sign in and try again.";
+            return View(Array.Empty<ServiceRequest>());
+        }
+    }
+
+    public async Task<IActionResult> Details(int? id)
+    {
+        if (id == null)
+        {
+            return NotFound();
         }
 
-        public async Task<IActionResult> Index()
+        try
         {
-            var serviceRequests = await _context.ServiceRequests
-                .Include(s => s.Contract)
-                .ThenInclude(c => c.Client)
-                .OrderByDescending(s => s.CreatedDate)
-                .ToListAsync();
-            return View(serviceRequests);
-        }
-
-        public async Task<IActionResult> Details(int? id)
-        {
-            if (id == null)
-            {
-                return NotFound();
-            }
-
-            var serviceRequest = await _context.ServiceRequests
-                .Include(s => s.Contract)
-                .ThenInclude(c => c.Client)
-                .FirstOrDefaultAsync(m => m.ServiceRequestId == id);
-
+            var serviceRequest = await _apiClient.GetServiceRequestAsync(id.Value);
             if (serviceRequest == null)
             {
                 return NotFound();
@@ -55,206 +51,207 @@ namespace EAPD7111_PART2.Controllers
 
             return View(serviceRequest);
         }
+        catch (ApiClientException ex)
+        {
+            _logger.LogError(ex, "Failed to load service request {ServiceRequestId}", id);
+            TempData["Error"] = "Could not load service request details from the API.";
+            return RedirectToAction(nameof(Index));
+        }
+    }
 
-        public async Task<IActionResult> Create()
+    public async Task<IActionResult> Create()
+    {
+        try
         {
             await SetContractDropdownAsync();
             return View();
         }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("ServiceRequestId,ContractId,RequestNumber,Description,CostUSD,Status,Notes")] ServiceRequest serviceRequest)
+        catch (ApiClientException ex)
         {
-            TryBindContractIdFromForm(serviceRequest);
-
-            if (ModelState.IsValid)
-            {
-                var contract = await _context.Contracts.FindAsync(serviceRequest.ContractId);
-                if (contract == null)
-                {
-                    ModelState.AddModelError("ContractId", "Contract not found.");
-                    await SetContractDropdownAsync(serviceRequest.ContractId);
-                    return View(serviceRequest);
-                }
-
-                var effectiveStatus = _statusAutomationService.ResolveEffectiveStatus(contract.Status, contract.EndDate);
-                if (effectiveStatus != contract.Status)
-                {
-                    contract.Status = effectiveStatus;
-                    contract.ModifiedDate = DateTime.UtcNow;
-                    await _context.SaveChangesAsync();
-                }
-
-                var blockedReason = _workflowService.GetServiceRequestBlockedReason(effectiveStatus);
-                if (blockedReason != null)
-                {
-                    ModelState.AddModelError("ContractId", blockedReason);
-                    await SetContractDropdownAsync(serviceRequest.ContractId);
-                    return View(serviceRequest);
-                }
-
-                var exchangeRate = await _currencyService.GetUsdToZarRateAsync();
-                serviceRequest.CostZAR = _currencyService.CalculateZARFromUSD(serviceRequest.CostUSD, exchangeRate);
-                serviceRequest.CreatedDate = DateTime.UtcNow;
-
-                try
-                {
-                    _context.Add(serviceRequest);
-                    await _context.SaveChangesAsync();
-                    TempData["Success"] = "Service request created successfully.";
-                    return RedirectToAction(nameof(Index));
-                }
-                catch (DbUpdateException)
-                {
-                    ModelState.AddModelError(string.Empty, "Could not save the service request. Check database connection.");
-                }
-            }
-
-            await SetContractDropdownAsync(serviceRequest.ContractId);
-            return View(serviceRequest);
-        }
-
-        public async Task<IActionResult> Edit(int? id)
-        {
-            if (id == null)
-            {
-                return NotFound();
-            }
-
-            var serviceRequest = await _context.ServiceRequests.FindAsync(id);
-            if (serviceRequest == null)
-            {
-                return NotFound();
-            }
-
-            await SetContractDropdownAsync(serviceRequest.ContractId, activeOnly: false);
-            return View(serviceRequest);
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("ServiceRequestId,ContractId,RequestNumber,Description,CostUSD,CostZAR,Status,Notes,CreatedDate")] ServiceRequest serviceRequest)
-        {
-            if (id != serviceRequest.ServiceRequestId)
-            {
-                return NotFound();
-            }
-
-            TryBindContractIdFromForm(serviceRequest);
-
-            if (ModelState.IsValid)
-            {
-                try
-                {
-                    var contract = await _context.Contracts.FindAsync(serviceRequest.ContractId);
-                    if (contract != null)
-                    {
-                        var blockedReason = _workflowService.GetServiceRequestBlockedReason(contract.Status);
-                        if (blockedReason != null)
-                        {
-                            ModelState.AddModelError("ContractId", blockedReason);
-                            await SetContractDropdownAsync(serviceRequest.ContractId, activeOnly: false);
-                            return View(serviceRequest);
-                        }
-                    }
-
-                    serviceRequest.ModifiedDate = DateTime.UtcNow;
-                    _context.Update(serviceRequest);
-                    await _context.SaveChangesAsync();
-                }
-                catch (DbUpdateConcurrencyException)
-                {
-                    if (!ServiceRequestExists(serviceRequest.ServiceRequestId))
-                    {
-                        return NotFound();
-                    }
-
-                    throw;
-                }
-
-                return RedirectToAction(nameof(Index));
-            }
-
-            await SetContractDropdownAsync(serviceRequest.ContractId, activeOnly: false);
-            return View(serviceRequest);
-        }
-
-        public async Task<IActionResult> Delete(int? id)
-        {
-            if (id == null)
-            {
-                return NotFound();
-            }
-
-            var serviceRequest = await _context.ServiceRequests
-                .Include(s => s.Contract)
-                .ThenInclude(c => c.Client)
-                .FirstOrDefaultAsync(m => m.ServiceRequestId == id);
-
-            if (serviceRequest == null)
-            {
-                return NotFound();
-            }
-
-            return View(serviceRequest);
-        }
-
-        [HttpPost, ActionName("Delete")]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> DeleteConfirmed(int id)
-        {
-            var serviceRequest = await _context.ServiceRequests.FindAsync(id);
-            if (serviceRequest != null)
-            {
-                _context.ServiceRequests.Remove(serviceRequest);
-            }
-
-            await _context.SaveChangesAsync();
+            _logger.LogError(ex, "Failed to prepare service request create form");
+            TempData["Error"] = "Could not load contracts from the API.";
             return RedirectToAction(nameof(Index));
         }
+    }
 
-        public async Task<IActionResult> GetExchangeRate()
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Create([Bind("ServiceRequestId,ContractId,RequestNumber,Description,CostUSD,Status,Notes")] ServiceRequest serviceRequest)
+    {
+        TryBindContractIdFromForm(serviceRequest);
+
+        if (ModelState.IsValid)
         {
-            var rate = await _currencyService.GetUsdToZarRateAsync();
-            return Json(new { rate, timestamp = DateTime.UtcNow });
-        }
-
-        private async Task SetContractDropdownAsync(int? selectedContractId = null, bool activeOnly = true)
-        {
-            var query = _context.Contracts.Include(c => c.Client).AsQueryable();
-            if (activeOnly)
+            try
             {
-                query = query.Where(c => c.Status == ContractStatus.Active);
+                var dto = new CreateServiceRequestDto
+                {
+                    ContractId = serviceRequest.ContractId,
+                    RequestNumber = serviceRequest.RequestNumber,
+                    Description = serviceRequest.Description,
+                    CostUSD = serviceRequest.CostUSD,
+                    Status = serviceRequest.Status,
+                    Notes = serviceRequest.Notes
+                };
+
+                await _apiClient.CreateServiceRequestAsync(dto);
+                TempData["Success"] = "Service request created successfully.";
+                return RedirectToAction(nameof(Index));
             }
-
-            var contracts = await query.OrderBy(c => c.ContractNumber).ToListAsync();
-            ViewBag.ContractList = DropdownHelper.BuildContractList(contracts, selectedContractId);
-        }
-
-        private void TryBindContractIdFromForm(ServiceRequest serviceRequest)
-        {
-            ModelState.Remove("Contract");
-            foreach (var key in ModelState.Keys.Where(k => k.StartsWith("Contract.", StringComparison.Ordinal)).ToList())
+            catch (ApiClientException ex)
             {
-                ModelState.Remove(key);
-            }
-
-            if (serviceRequest.ContractId > 0)
-            {
-                return;
-            }
-
-            if (int.TryParse(Request.Form["ContractId"], out var contractId) && contractId > 0)
-            {
-                serviceRequest.ContractId = contractId;
-                ModelState.Remove(nameof(serviceRequest.ContractId));
+                _logger.LogError(ex, "Failed to create service request");
+                ModelState.AddModelError(string.Empty, "Could not save the service request. Please check the contract status and try again.");
             }
         }
 
-        private bool ServiceRequestExists(int id)
+        await SetContractDropdownAsync(serviceRequest.ContractId);
+        return View(serviceRequest);
+    }
+
+    public async Task<IActionResult> Edit(int? id)
+    {
+        if (id == null)
         {
-            return _context.ServiceRequests.Any(e => e.ServiceRequestId == id);
+            return NotFound();
+        }
+
+        try
+        {
+            var serviceRequest = await _apiClient.GetServiceRequestAsync(id.Value);
+            if (serviceRequest == null)
+            {
+                return NotFound();
+            }
+
+            await SetContractDropdownAsync(serviceRequest.ContractId, activeOnly: false);
+            return View(serviceRequest);
+        }
+        catch (ApiClientException ex)
+        {
+            _logger.LogError(ex, "Failed to load service request {ServiceRequestId} for edit", id);
+            TempData["Error"] = "Could not load the service request for editing.";
+            return RedirectToAction(nameof(Index));
+        }
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Edit(int id, [Bind("ServiceRequestId,ContractId,RequestNumber,Description,CostUSD,CostZAR,Status,Notes,CreatedDate")] ServiceRequest serviceRequest)
+    {
+        if (id != serviceRequest.ServiceRequestId)
+        {
+            return NotFound();
+        }
+
+        TryBindContractIdFromForm(serviceRequest);
+
+        if (ModelState.IsValid)
+        {
+            try
+            {
+                await _apiClient.UpdateServiceRequestAsync(id, serviceRequest);
+                TempData["Success"] = "Service request updated successfully.";
+                return RedirectToAction(nameof(Index));
+            }
+            catch (ApiClientException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                return NotFound();
+            }
+            catch (ApiClientException ex)
+            {
+                _logger.LogError(ex, "Failed to update service request {ServiceRequestId}", id);
+                ModelState.AddModelError(string.Empty, "Could not update the service request. Please try again.");
+            }
+        }
+
+        await SetContractDropdownAsync(serviceRequest.ContractId, activeOnly: false);
+        return View(serviceRequest);
+    }
+
+    public async Task<IActionResult> Delete(int? id)
+    {
+        if (id == null)
+        {
+            return NotFound();
+        }
+
+        try
+        {
+            var serviceRequest = await _apiClient.GetServiceRequestAsync(id.Value);
+            if (serviceRequest == null)
+            {
+                return NotFound();
+            }
+
+            return View(serviceRequest);
+        }
+        catch (ApiClientException ex)
+        {
+            _logger.LogError(ex, "Failed to load service request {ServiceRequestId} for delete", id);
+            TempData["Error"] = "Could not load the service request.";
+            return RedirectToAction(nameof(Index));
+        }
+    }
+
+    [HttpPost, ActionName("Delete")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteConfirmed(int id)
+    {
+        try
+        {
+            await _apiClient.DeleteServiceRequestAsync(id);
+            TempData["Success"] = "Service request deleted successfully.";
+        }
+        catch (ApiClientException ex)
+        {
+            _logger.LogError(ex, "Failed to delete service request {ServiceRequestId}", id);
+            TempData["Error"] = "Could not delete the service request.";
+        }
+
+        return RedirectToAction(nameof(Index));
+    }
+
+    public async Task<IActionResult> GetExchangeRate()
+    {
+        try
+        {
+            var response = await _apiClient.GetExchangeRateAsync();
+            return Json(new { rate = response.Rate, timestamp = response.Timestamp });
+        }
+        catch (ApiClientException ex)
+        {
+            _logger.LogWarning(ex, "Failed to fetch exchange rate from API");
+            return Json(new { rate = FallbackUsdToZarRate, timestamp = DateTime.UtcNow });
+        }
+    }
+
+    private async Task SetContractDropdownAsync(int? selectedContractId = null, bool activeOnly = true)
+    {
+        var contracts = await _apiClient.GetContractsAsync(
+            status: activeOnly ? ContractStatus.Active : null);
+
+        var orderedContracts = contracts.OrderBy(c => c.ContractNumber).ToList();
+        ViewBag.ContractList = DropdownHelper.BuildContractList(orderedContracts, selectedContractId);
+    }
+
+    private void TryBindContractIdFromForm(ServiceRequest serviceRequest)
+    {
+        ModelState.Remove("Contract");
+        foreach (var key in ModelState.Keys.Where(k => k.StartsWith("Contract.", StringComparison.Ordinal)).ToList())
+        {
+            ModelState.Remove(key);
+        }
+
+        if (serviceRequest.ContractId > 0)
+        {
+            return;
+        }
+
+        if (int.TryParse(Request.Form["ContractId"], out var contractId) && contractId > 0)
+        {
+            serviceRequest.ContractId = contractId;
+            ModelState.Remove(nameof(serviceRequest.ContractId));
         }
     }
 }

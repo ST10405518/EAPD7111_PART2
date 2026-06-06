@@ -10,16 +10,26 @@
     <Compile Remove="EAPD7111_PART2.Tests/**" />
     <Content Remove="EAPD7111_PART2.Tests/**" />
     <None Remove="EAPD7111_PART2.Tests/**" />
+    <Compile Remove="GLMS.Api/**" />
+    <Content Remove="GLMS.Api/**" />
+    <None Remove="GLMS.Api/**" />
+    <Compile Remove="GLMS.Shared/**" />
+    <Content Remove="GLMS.Shared/**" />
+    <None Remove="GLMS.Shared/**" />
+    <Compile Remove="Models/**" />
+    <Compile Remove="Data/**" />
+    <Compile Remove="Migrations/**" />
+    <Compile Remove="Services/**" />
+    <Compile Include="Services/Api/**" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.13" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.3" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.3">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation" Version="9.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="GLMS.Shared\GLMS.Shared.csproj" />
   </ItemGroup>
 
 </Project>

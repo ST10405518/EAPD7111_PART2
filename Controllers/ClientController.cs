@@ -1,37 +1,46 @@
-using EAPD7111_PART2.Data;
-using EAPD7111_PART2.Models;
+using EAPD7111_PART2.Helpers;
+using EAPD7111_PART2.Services.Api;
+using GLMS.Shared.Models;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
-namespace EAPD7111_PART2.Controllers
+namespace EAPD7111_PART2.Controllers;
+
+public class ClientController : Controller
 {
-    public class ClientController : Controller
+    private readonly IGlmsApiClient _apiClient;
+    private readonly ILogger<ClientController> _logger;
+
+    public ClientController(IGlmsApiClient apiClient, ILogger<ClientController> logger)
     {
-        private readonly GLMSDbContext _context;
+        _apiClient = apiClient;
+        _logger = logger;
+    }
 
-        public ClientController(GLMSDbContext context)
+    public async Task<IActionResult> Index()
+    {
+        try
         {
-            _context = context;
+            var clients = await _apiClient.GetClientsAsync();
+            return View(clients);
+        }
+        catch (ApiClientException ex)
+        {
+            _logger.LogError(ex, "Failed to load clients");
+            TempData["Error"] = "Could not load clients from the API. Please sign in and try again.";
+            return View(Array.Empty<Client>());
+        }
+    }
+
+    public async Task<IActionResult> Details(int? id)
+    {
+        if (id == null)
+        {
+            return NotFound();
         }
 
-        // GET: Client
-        public async Task<IActionResult> Index()
+        try
         {
-            return View(await _context.Clients.ToListAsync());
-        }
-
-        // GET: Client/Details/5
-        public async Task<IActionResult> Details(int? id)
-        {
-            if (id == null)
-            {
-                return NotFound();
-            }
-
-            var client = await _context.Clients
-                .Include(c => c.Contracts)
-                .FirstOrDefaultAsync(m => m.ClientId == id);
-
+            var client = await _apiClient.GetClientAsync(id.Value);
             if (client == null)
             {
                 return NotFound();
@@ -39,121 +48,138 @@ namespace EAPD7111_PART2.Controllers
 
             return View(client);
         }
-
-        // GET: Client/Create
-        public IActionResult Create()
+        catch (ApiClientException ex)
         {
-            return View();
-        }
-
-        // POST: Client/Create
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("ClientId,Name,Email,PhoneNumber,Address,Region,ContactPerson")] Client client)
-        {
-            if (ModelState.IsValid)
-            {
-                try
-                {
-                    client.CreatedDate = DateTime.UtcNow;
-                    _context.Add(client);
-                    await _context.SaveChangesAsync();
-                    TempData["Success"] = "Client created successfully.";
-                    return RedirectToAction(nameof(Index));
-                }
-                catch (DbUpdateException)
-                {
-                    ModelState.AddModelError(string.Empty, "Could not save the client. Ensure SQL Server LocalDB is running and the database is migrated.");
-                }
-            }
-            return View(client);
-        }
-
-        // GET: Client/Edit/5
-        public async Task<IActionResult> Edit(int? id)
-        {
-            if (id == null)
-            {
-                return NotFound();
-            }
-
-            var client = await _context.Clients.FindAsync(id);
-            if (client == null)
-            {
-                return NotFound();
-            }
-            return View(client);
-        }
-
-        // POST: Client/Edit/5
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("ClientId,Name,Email,PhoneNumber,Address,Region,ContactPerson,CreatedDate")] Client client)
-        {
-            if (id != client.ClientId)
-            {
-                return NotFound();
-            }
-
-            if (ModelState.IsValid)
-            {
-                try
-                {
-                    _context.Update(client);
-                    await _context.SaveChangesAsync();
-                }
-                catch (DbUpdateConcurrencyException)
-                {
-                    if (!ClientExists(client.ClientId))
-                    {
-                        return NotFound();
-                    }
-                    else
-                    {
-                        throw;
-                    }
-                }
-                return RedirectToAction(nameof(Index));
-            }
-            return View(client);
-        }
-
-        // GET: Client/Delete/5
-        public async Task<IActionResult> Delete(int? id)
-        {
-            if (id == null)
-            {
-                return NotFound();
-            }
-
-            var client = await _context.Clients
-                .FirstOrDefaultAsync(m => m.ClientId == id);
-            if (client == null)
-            {
-                return NotFound();
-            }
-
-            return View(client);
-        }
-
-        // POST: Client/Delete/5
-        [HttpPost, ActionName("Delete")]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> DeleteConfirmed(int id)
-        {
-            var client = await _context.Clients.FindAsync(id);
-            if (client != null)
-            {
-                _context.Clients.Remove(client);
-            }
-
-            await _context.SaveChangesAsync();
+            _logger.LogError(ex, "Failed to load client {ClientId}", id);
+            TempData["Error"] = "Could not load client details from the API.";
             return RedirectToAction(nameof(Index));
         }
+    }
 
-        private bool ClientExists(int id)
+    public IActionResult Create()
+    {
+        return View();
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Create([Bind("ClientId,Name,Email,PhoneNumber,Address,Region,ContactPerson")] Client client)
+    {
+        if (ModelState.IsValid)
         {
-            return _context.Clients.Any(e => e.ClientId == id);
+            try
+            {
+                client.CreatedDate = DateTime.UtcNow;
+                await _apiClient.CreateClientAsync(client);
+                TempData["Success"] = "Client created successfully.";
+                return RedirectToAction(nameof(Index));
+            }
+            catch (ApiClientException ex)
+            {
+                _logger.LogError(ex, "Failed to create client");
+                ModelState.AddModelError(string.Empty, "Could not save the client. Please check your input and try again.");
+            }
         }
+
+        return View(client);
+    }
+
+    public async Task<IActionResult> Edit(int? id)
+    {
+        if (id == null)
+        {
+            return NotFound();
+        }
+
+        try
+        {
+            var client = await _apiClient.GetClientAsync(id.Value);
+            if (client == null)
+            {
+                return NotFound();
+            }
+
+            return View(client);
+        }
+        catch (ApiClientException ex)
+        {
+            _logger.LogError(ex, "Failed to load client {ClientId} for edit", id);
+            TempData["Error"] = "Could not load the client for editing.";
+            return RedirectToAction(nameof(Index));
+        }
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Edit(int id, [Bind("ClientId,Name,Email,PhoneNumber,Address,Region,ContactPerson,CreatedDate")] Client client)
+    {
+        if (id != client.ClientId)
+        {
+            return NotFound();
+        }
+
+        if (ModelState.IsValid)
+        {
+            try
+            {
+                await _apiClient.UpdateClientAsync(id, client);
+                TempData["Success"] = "Client updated successfully.";
+                return RedirectToAction(nameof(Index));
+            }
+            catch (ApiClientException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                return NotFound();
+            }
+            catch (ApiClientException ex)
+            {
+                _logger.LogError(ex, "Failed to update client {ClientId}", id);
+                ModelState.AddModelError(string.Empty, "Could not update the client. Please try again.");
+            }
+        }
+
+        return View(client);
+    }
+
+    public async Task<IActionResult> Delete(int? id)
+    {
+        if (id == null)
+        {
+            return NotFound();
+        }
+
+        try
+        {
+            var client = await _apiClient.GetClientAsync(id.Value);
+            if (client == null)
+            {
+                return NotFound();
+            }
+
+            return View(client);
+        }
+        catch (ApiClientException ex)
+        {
+            _logger.LogError(ex, "Failed to load client {ClientId} for delete", id);
+            TempData["Error"] = "Could not load the client.";
+            return RedirectToAction(nameof(Index));
+        }
+    }
+
+    [HttpPost, ActionName("Delete")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteConfirmed(int id)
+    {
+        try
+        {
+            await _apiClient.DeleteClientAsync(id);
+            TempData["Success"] = "Client deleted successfully.";
+        }
+        catch (ApiClientException ex)
+        {
+            _logger.LogError(ex, "Failed to delete client {ClientId}", id);
+            TempData["Error"] = "Could not delete the client.";
+        }
+
+        return RedirectToAction(nameof(Index));
     }
 }
